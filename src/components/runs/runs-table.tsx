@@ -189,9 +189,9 @@ export function RunsTable() {
                         key={col.key}
                         onMouseEnter={() => setHoveredCol(col.key)}
                         className={cn(
-                          "h-11 border-b border-border/70 bg-card px-3.5 whitespace-nowrap transition-colors group-last/row:border-b-0 group-hover/row:bg-muted/60",
+                          "h-11 border-b border-border/70 bg-card px-3.5 whitespace-nowrap transition-colors group-last/row:border-b-0 group-hover/row:bg-sky-50/60 dark:group-hover/row:bg-sky-400/5",
                           col.align === "right" && "text-right tabular-nums",
-                          hovered && "bg-accent/60 group-hover/row:bg-accent",
+                          hovered && "bg-sky-50 group-hover/row:bg-sky-100/70 dark:bg-sky-400/8 dark:group-hover/row:bg-sky-400/15",
                           i === 0 && "sticky left-0 z-[1] text-xs font-medium tabular-nums shadow-[1px_0_0_var(--border)] md:static md:shadow-none",
                           isEmptyValue(value) && "text-muted-foreground"
                         )}
