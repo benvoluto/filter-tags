@@ -47,8 +47,7 @@ export function FilterEditor({ initial, column: fixedColumn, onSubmit, onCancel 
   if (!column) {
     return (
       <div className="flex flex-col gap-2">
-        <p className="px-1 text-xs font-medium text-muted-foreground">Filter on column</p>
-        <Command className="rounded-lg! border border-border bg-background p-0">
+        <Command className="rounded-[0.2em]! border border-border bg-background p-0">
           <CommandInput placeholder="Select or type a column…" autoFocus />
           <CommandList className="max-h-64">
             <CommandEmpty>No matching columns.</CommandEmpty>
