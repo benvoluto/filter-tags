@@ -28,7 +28,7 @@ export function FilterChip({
       ref={chipRef}
       data-editing={editing || undefined}
       className={cn(
-        "group/chip relative inline-flex h-10 max-w-[200px] min-w-0 shrink-0 items-center gap-1 rounded-full border border-border bg-card pr-1 pl-3 text-sm shadow-xs transition-colors",
+        "group/chip relative inline-flex h-10 max-w-[200px] min-w-0 shrink-0 items-center gap-1 rounded-full border border-amber-200/80 bg-amber-50 pr-1 pl-3 dark:border-amber-400/25 dark:bg-amber-400/10 text-sm shadow-xs transition-colors",
         "hover:border-primary/50 data-editing:border-primary data-editing:ring-3 data-editing:ring-ring/30"
       )}
     >
@@ -60,7 +60,7 @@ export function FilterChip({
         <PopoverTrigger
           aria-label="Edit filter"
           className={cn(
-            "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+            "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-amber-100 hover:text-foreground dark:hover:bg-amber-400/15 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
             // Edit only shows on hover for pointer devices; touch devices always show it.
             "[@media(hover:hover)]:hidden [@media(hover:hover)]:group-hover/chip:inline-flex [@media(hover:hover)]:group-focus-within/chip:inline-flex [@media(hover:hover)]:group-data-editing/chip:inline-flex"
           )}
