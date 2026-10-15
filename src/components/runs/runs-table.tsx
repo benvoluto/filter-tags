@@ -123,7 +123,7 @@ export function RunsTable() {
         ))}
 
         <Popover open={addOpen} onOpenChange={setAddOpen}>
-          <PopoverTrigger render={<Button variant="outline" className="h-10 rounded-full px-3.5 shadow-xs" />}>
+          <PopoverTrigger render={<Button variant="outline" className="h-10 rounded-full border-sky-200/80 bg-sky-50 px-3.5 shadow-xs hover:bg-sky-100/70 aria-expanded:bg-sky-100/70 dark:border-sky-400/25 dark:bg-sky-400/8 dark:hover:bg-sky-400/15 dark:aria-expanded:bg-sky-400/15" />}>
             <ListFilterIcon />
             Add filter
           </PopoverTrigger>
