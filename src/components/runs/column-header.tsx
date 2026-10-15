@@ -63,7 +63,7 @@ export function ColumnHeader({
       aria-sort={sortDir === "asc" ? "ascending" : sortDir === "desc" ? "descending" : undefined}
       style={{ minWidth: column.minWidth }}
       className={cn(
-        "group/col sticky top-0 z-10 h-12 border-b border-border bg-secondary/70 px-2 text-left align-middle font-semibold whitespace-nowrap text-secondary-foreground backdrop-blur transition-colors first:rounded-tl-[calc(var(--radius)-2px)] last:rounded-tr-[calc(var(--radius)-2px)]",
+        "group/col sticky top-0 z-10 h-12 border-b border-border bg-muted/70 px-2 text-left align-middle font-semibold whitespace-nowrap text-secondary-foreground backdrop-blur transition-colors first:rounded-tl-[calc(var(--radius)-2px)] last:rounded-tr-[calc(var(--radius)-2px)]",
         (hovered || filterOpen) && "bg-sky-100/70 text-foreground dark:bg-sky-400/15",
         thProps.className
       )}
