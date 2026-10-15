@@ -101,7 +101,7 @@ export function RunsTable() {
   return (
     <div className="flex flex-col gap-4">
       {/* Toolbar: search · filter chips · add filter · clear filters */}
-      <div className="flex flex-wrap items-start gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <SearchBox
           value={query}
           onChange={(v) => {
@@ -123,7 +123,7 @@ export function RunsTable() {
         ))}
 
         <Popover open={addOpen} onOpenChange={setAddOpen}>
-          <PopoverTrigger render={<Button variant="outline" className="h-9 rounded-full px-3.5 shadow-xs" />}>
+          <PopoverTrigger render={<Button variant="outline" className="h-10 rounded-full px-3.5 shadow-xs" />}>
             <ListFilterIcon />
             Add filter
           </PopoverTrigger>
@@ -141,7 +141,7 @@ export function RunsTable() {
         {filters.length > 2 ? (
           <Button
             variant="ghost"
-            className="h-9 rounded-full px-3.5 text-muted-foreground"
+            className="h-10 rounded-full px-3.5 text-muted-foreground"
             onClick={() => setFilters([])}
           >
             <FilterXIcon />

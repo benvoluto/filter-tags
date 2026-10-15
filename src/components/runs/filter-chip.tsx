@@ -28,7 +28,7 @@ export function FilterChip({
       ref={chipRef}
       data-editing={editing || undefined}
       className={cn(
-        "group/chip relative inline-flex h-9 max-w-[200px] min-w-0 shrink-0 items-center gap-1 rounded-full border border-border bg-card pr-1 pl-3 text-sm shadow-xs transition-colors",
+        "group/chip relative inline-flex h-10 max-w-[200px] min-w-0 shrink-0 items-center gap-1 rounded-full border border-border bg-card pr-1 pl-3 text-sm shadow-xs transition-colors",
         "hover:border-primary/50 data-editing:border-primary data-editing:ring-3 data-editing:ring-ring/30"
       )}
     >

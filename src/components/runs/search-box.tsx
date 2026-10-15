@@ -39,7 +39,7 @@ export function SearchBox({
     <div className={cn("relative h-10 min-w-0", className)}>
       <div
         className={cn(
-          "absolute inset-x-0 top-0 z-30 flex items-start gap-1 rounded-2xl border border-input bg-card py-1 pr-1 pl-3 shadow-xs transition-shadow",
+          "absolute inset-x-0 top-0 z-30 flex items-start gap-1 rounded-2xl border border-input bg-card py-[3px] pr-1 pl-3 shadow-xs transition-shadow",
           focused && "border-ring shadow-lg ring-3 ring-ring/30"
         )}
       >
@@ -67,7 +67,7 @@ export function SearchBox({
           )}
         />
         {hasValue ? (
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex h-8 shrink-0 items-center gap-1">
             <Button variant="ghost" size="icon-sm" aria-label="Clear search" onClick={() => onChange("")}>
               <XIcon />
             </Button>
