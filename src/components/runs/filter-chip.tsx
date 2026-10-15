@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { PencilIcon, SearchIcon, XIcon } from "lucide-react"
+import { FilterIcon, PencilIcon, XIcon } from "lucide-react"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -38,7 +38,7 @@ export function FilterChip({
           className="flex min-w-0 flex-1 cursor-default items-center gap-1.5"
           onClick={() => setEditing(true)}
         >
-          {filter.kind === "search" ? <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" /> : null}
+          <FilterIcon className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
           <span className="truncate font-medium">{chipLabel(filter)}</span>
           {count > 1 ? (
             <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground tabular-nums">
