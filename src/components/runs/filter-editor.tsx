@@ -414,7 +414,7 @@ function ValuePicker({
           ))}
         </div>
       ) : null}
-      <Command className="rounded-lg! border border-border bg-background p-0" loop>
+      <Command className="rounded-[0.2em]! border border-border bg-background p-0" loop>
         <CommandInput
           placeholder={values.length ? "Add another value…" : `Select or type ${col.label.toLowerCase()}…`}
           value={query}
