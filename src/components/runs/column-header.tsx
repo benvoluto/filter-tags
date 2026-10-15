@@ -6,6 +6,7 @@ import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, FilterIcon, XIcon } from "
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -92,13 +93,15 @@ export function ColumnHeader({
               <ArrowUpDownIcon className="size-3.5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align={right ? "end" : "start"} className="w-48">
-              <DropdownMenuLabel>Sort {column.label}</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => onSort("asc", false)}>
-                <ArrowUpIcon /> Ascending
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onSort("desc", false)}>
-                <ArrowDownIcon /> Descending
-              </DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Sort {column.label}</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => onSort("asc", false)}>
+                  <ArrowUpIcon /> Ascending
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onSort("desc", false)}>
+                  <ArrowDownIcon /> Descending
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onSort(sortDir === "asc" ? "desc" : "asc", true)}>
                 <ArrowUpDownIcon /> {sortDir ? "Flip in multi-sort" : "Add to sort"}
