@@ -95,7 +95,7 @@ function highlightedItem(input: HTMLElement) {
 
 function KeyboardHint({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-1 text-[11px] text-muted-foreground [@media(hover:none)]:hidden [&_kbd]:rounded [&_kbd]:border [&_kbd]:border-border [&_kbd]:bg-muted [&_kbd]:px-1 [&_kbd]:font-sans [&_kbd]:text-[10px] [&_kbd]:font-medium">
+    <p className="px-1 text-[11px] text-muted-foreground [@media(hover:none)]:hidden [&_kbd]:font-sans [&_kbd]:font-medium [&_kbd]:text-foreground/70">
       {children}
     </p>
   )
@@ -286,7 +286,7 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
     const columnIsEmpty = columnReturnsNoRowsFor(0)
     return (
       <div className="flex w-[22rem] max-w-full flex-col gap-2">
-        <Command className="rounded-[0.2em]! border border-border bg-background p-0">
+        <Command className="rounded-none! border-0 border-b border-border bg-background p-0">
           <CommandInput
             placeholder="Select or type a column…"
             autoFocus
@@ -298,7 +298,6 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
             <CommandEmpty>No matching columns.</CommandEmpty>
             <CommandGroup>
               {COLUMNS.map((c) => {
-                const Icon = COLUMN_ICONS[c.key]
                 const empty = columnIsEmpty?.(c.key) ?? false
                 return (
                   <CommandItem
@@ -306,12 +305,13 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
                     value={c.label}
                     onSelect={() => changeColumn(0, c.key)}
                     title={empty ? NO_ROWS_COLUMN_TITLE : undefined}
-                    className={cn(empty && "text-amber-600/70 data-selected:bg-amber-50 data-selected:text-amber-700/80 dark:text-amber-300/60 dark:data-selected:bg-amber-400/10 dark:data-selected:text-amber-300/80")}
+                    className={cn(
+                      empty &&
+                        "text-amber-600/70 data-selected:bg-amber-50 data-selected:text-amber-700/80 dark:text-amber-300/60 dark:data-selected:bg-amber-400/10 dark:data-selected:text-amber-300/80"
+                    )}
                   >
-                    <Icon className={empty ? "text-current" : "text-muted-foreground"} />
                     <span className="flex-1">{c.label}</span>
                     {empty ? <span className="sr-only"> (no matching rows)</span> : null}
-                    <span className={cn("text-xs", empty ? "text-current" : "text-muted-foreground")}>{c.type}</span>
                   </CommandItem>
                 )
               })}
@@ -772,7 +772,7 @@ function ValuePicker({
           ))}
         </div>
       ) : null}
-      <Command className="rounded-[0.2em]! border border-border bg-background p-0" loop>
+      <Command className="rounded-none! border-0 border-b border-border bg-background p-0" loop>
         <CommandInput
           placeholder={values.length ? "Add another value…" : `Select or type ${col.label.toLowerCase()}…`}
           value={query}

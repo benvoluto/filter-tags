@@ -5,12 +5,13 @@ import { filterSummary, type Filter, type MatchMode } from "./filters"
 
 export type ViewFilter = Omit<Filter, "id">
 
-/** A saved combination of filters, sorts, and match mode (search text is not part of a view). */
+/** A saved combination of filters, the sort, and match mode (search text is not part of a view). */
 export type SavedView = {
   id: string
   name: string
   filters: ViewFilter[]
-  sort: SortRule[]
+  /** The single sorted column, or null for unsorted. */
+  sort: SortRule | null
   matchMode: MatchMode
 }
 
@@ -20,9 +21,9 @@ const stripId = (f: Filter): ViewFilter => {
   return copy as ViewFilter
 }
 
-export function makeView(name: string, filters: Filter[], sort: SortRule[], matchMode: MatchMode): SavedView {
+export function makeView(name: string, filters: Filter[], sort: SortRule | null, matchMode: MatchMode): SavedView {
   viewSeq += 1
-  return { id: `view${viewSeq}`, name, filters: filters.map(stripId), sort: [...sort], matchMode }
+  return { id: `view${viewSeq}`, name, filters: filters.map(stripId), sort: sort ? { ...sort } : null, matchMode }
 }
 let viewSeq = 0
 
@@ -32,13 +33,13 @@ export function viewFilterSummary(view: Pick<SavedView, "filters" | "matchMode">
   return parts.join(view.matchMode === "all" ? " · " : " OR ")
 }
 
-export function sortSummary(sort: SortRule[]): string {
-  if (!sort.length) return "Unsorted"
-  return `Sorted by ${sort.map((s) => `${COLUMN_MAP[s.key].label} ${s.dir === "asc" ? "↑" : "↓"}`).join(", ")}`
+export function sortSummary(sort: SortRule | null): string {
+  if (!sort) return "Unsorted"
+  return `Sorted by ${COLUMN_MAP[sort.key].label} ${sort.dir === "asc" ? "↑ ascending" : "↓ descending"}`
 }
 
 /** True when the current table state is exactly what the view describes. */
-export function viewMatchesState(view: SavedView, filters: Filter[], sort: SortRule[], matchMode: MatchMode) {
+export function viewMatchesState(view: SavedView, filters: Filter[], sort: SortRule | null, matchMode: MatchMode) {
   return (
     view.matchMode === matchMode &&
     JSON.stringify(view.sort) === JSON.stringify(sort) &&

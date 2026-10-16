@@ -44,19 +44,17 @@ const STATUS_STYLES: Record<string, string> = {
 /** Columns rendered as underlined entity links, like Notable's "Initiated By" / "Recipient". */
 const LINK_COLUMNS = new Set<ColumnKey>(["runId", "customer", "owner"])
 
-function compareRows(a: RunRow, b: RunRow, rules: SortRule[]) {
-  for (const { key, dir } of rules) {
-    const av = a[key]
-    const bv = b[key]
-    // Empty values always sink to the bottom regardless of direction.
-    if (isEmptyValue(av) && isEmptyValue(bv)) continue
-    if (isEmptyValue(av)) return 1
-    if (isEmptyValue(bv)) return -1
-    const cmp =
-      typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv))
-    if (cmp !== 0) return dir === "asc" ? cmp : -cmp
-  }
-  return 0
+function compareRows(a: RunRow, b: RunRow, sort: SortRule | null) {
+  if (!sort) return 0
+  const { key, dir } = sort
+  const av = a[key]
+  const bv = b[key]
+  // Empty values always sink to the bottom regardless of direction.
+  if (isEmptyValue(av) && isEmptyValue(bv)) return 0
+  if (isEmptyValue(av)) return 1
+  if (isEmptyValue(bv)) return -1
+  const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv))
+  return dir === "asc" ? cmp : -cmp
 }
 
 /** "filters": filters only · "quick": filters + partial (quick) filters · "views": filters, quick filters + saved views */
@@ -65,10 +63,8 @@ export type PrototypeVariant = "filters" | "quick" | "views"
 export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant }) {
   const [query, setQuery] = React.useState("")
   const [filters, setFilters] = React.useState<Filter[]>([])
-  const [sort, setSort] = React.useState<SortRule[]>([
-    { key: "status", dir: "asc" },
-    { key: "started", dir: "desc" },
-  ])
+  // One sorted column at a time (or none).
+  const [sort, setSort] = React.useState<SortRule | null>({ key: "started", dir: "desc" })
   const [page, setPage] = React.useState(0)
   const [hoveredCol, setHoveredCol] = React.useState<ColumnKey | null>(null)
   const [addOpen, setAddOpen] = React.useState(false)
@@ -133,16 +129,7 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     setQuery("")
   }
 
-  const applySort = (key: ColumnKey, dir: SortDir | null, additive: boolean) => {
-    setSort((rules) => {
-      if (!additive) return dir ? [{ key, dir }] : []
-      const rest = rules.filter((r) => r.key !== key)
-      if (!dir) return rest
-      const idx = rules.findIndex((r) => r.key === key)
-      if (idx === -1) return [...rules, { key, dir }]
-      return rules.map((r) => (r.key === key ? { key, dir } : r))
-    })
-  }
+  const applySort = (key: ColumnKey, dir: SortDir | null) => setSort(dir ? { key, dir } : null)
 
   const filteredColumns = new Set(filters.flatMap(filterColumns))
   // A partial filter disappears once its column has a filter (and returns when that filter is
@@ -232,9 +219,6 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
               >
                 <PlusIcon className="size-3.5 text-muted-foreground" />
                 Add filter
-                <kbd className="ml-0.5 hidden h-4 min-w-4 items-center justify-center rounded border border-border bg-muted px-1 font-sans text-[10px] font-medium text-muted-foreground [@media(hover:hover)]:inline-flex">
-                  F
-                </kbd>
               </PopoverTrigger>
               <PopoverContent
                 align="start"
@@ -287,9 +271,6 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
                 >
                   <FilterXIcon />
                   Clear filters
-                  <kbd className="ml-0.5 hidden h-4 min-w-4 items-center justify-center rounded border border-border bg-muted px-1 font-sans text-[10px] font-medium text-muted-foreground [@media(hover:hover)]:inline-flex">
-                    C
-                  </kbd>
                 </Button>
               ) : null}
 
@@ -324,17 +305,14 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
               <thead>
                 <tr>
                   {COLUMNS.map((col, i) => {
-                    const sortIndex = sort.findIndex((s) => s.key === col.key)
                     return (
                       <ColumnHeader
                         key={col.key}
                         column={col}
-                        sortIndex={sortIndex}
-                        sortDir={sortIndex >= 0 ? sort[sortIndex].dir : undefined}
-                        multiSort={sort.length > 1}
+                        sortDir={sort?.key === col.key ? sort.dir : undefined}
                         filtered={filteredColumns.has(col.key)}
                         hovered={hoveredCol === col.key}
-                        onSort={(dir, additive) => applySort(col.key, dir, additive)}
+                        onSort={(dir) => applySort(col.key, dir)}
                         onAddFilter={addFilter}
                         thProps={{
                           onMouseEnter: () => setHoveredCol(col.key),

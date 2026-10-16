@@ -155,7 +155,6 @@ function RenameField({ initial, onDone }: { initial: string; onDone: (name: stri
         }}
         className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-medium outline-none"
       />
-      <span className="pr-1.5 text-[10px] text-muted-foreground [@media(hover:none)]:hidden">Enter</span>
     </div>
   )
 }

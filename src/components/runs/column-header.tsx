@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, FilterIcon, XIcon } from "lucide-react"
+import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, CheckIcon, FilterIcon, XIcon } from "lucide-react"
 
 import {
   DropdownMenu,
@@ -28,9 +28,7 @@ const revealOnHover = "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:gro
 
 export function ColumnHeader({
   column,
-  sortIndex,
   sortDir,
-  multiSort,
   filtered,
   hovered,
   onSort,
@@ -38,12 +36,12 @@ export function ColumnHeader({
   thProps,
 }: {
   column: ColumnDef
-  sortIndex: number
+  /** Set when this column is the table's (single) sorted column. */
   sortDir?: SortDir
-  multiSort: boolean
   filtered: boolean
   hovered: boolean
-  onSort: (dir: SortDir | null, additive: boolean) => void
+  /** Sort the table by this column; null clears the sort. */
+  onSort: (dir: SortDir | null) => void
   onAddFilter: (draft: FilterDraft) => void
   thProps: React.ComponentProps<"th">
 }) {
@@ -51,10 +49,8 @@ export function ColumnHeader({
   const [filterOpen, setFilterOpen] = React.useState(false)
   const right = column.align === "right"
 
-  const cycle = (e: React.MouseEvent) => {
-    const next: SortDir | null = !sortDir ? "asc" : sortDir === "asc" ? "desc" : null
-    onSort(next, e.shiftKey)
-  }
+  // Click cycles ascending → descending → unsorted.
+  const cycle = () => onSort(!sortDir ? "asc" : sortDir === "asc" ? "desc" : null)
 
   return (
     <th
@@ -72,7 +68,7 @@ export function ColumnHeader({
         <button
           type="button"
           onClick={cycle}
-          title="Click to sort, Shift+click to add to sort"
+          title="Click to sort (ascending, descending, off)"
           className={cn(
             "inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-[13px] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
             right && "flex-row-reverse"
@@ -82,7 +78,6 @@ export function ColumnHeader({
           {sortDir ? (
             <span className="inline-flex items-center text-muted-foreground">
               {sortDir === "asc" ? <ArrowUpIcon className="size-3.5" /> : <ArrowDownIcon className="size-3.5" />}
-              {multiSort ? <sup className="text-[10px] font-bold">{sortIndex + 1}</sup> : null}
             </span>
           ) : null}
         </button>
@@ -95,21 +90,22 @@ export function ColumnHeader({
             <DropdownMenuContent align={right ? "end" : "start"} className="w-48">
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Sort {column.label}</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => onSort("asc", false)}>
+                <DropdownMenuItem onClick={() => onSort("asc")}>
                   <ArrowUpIcon /> Ascending
+                  {sortDir === "asc" ? <CheckIcon className="ml-auto" /> : null}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onSort("desc", false)}>
+                <DropdownMenuItem onClick={() => onSort("desc")}>
                   <ArrowDownIcon /> Descending
+                  {sortDir === "desc" ? <CheckIcon className="ml-auto" /> : null}
                 </DropdownMenuItem>
               </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onSort(sortDir === "asc" ? "desc" : "asc", true)}>
-                <ArrowUpDownIcon /> {sortDir ? "Flip in multi-sort" : "Add to sort"}
-              </DropdownMenuItem>
               {sortDir ? (
-                <DropdownMenuItem onClick={() => onSort(null, true)}>
-                  <XIcon /> Remove sort
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onSort(null)}>
+                    <XIcon /> Clear sort
+                  </DropdownMenuItem>
+                </>
               ) : null}
             </DropdownMenuContent>
           </DropdownMenu>

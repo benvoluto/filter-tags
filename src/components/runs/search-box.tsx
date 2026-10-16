@@ -73,14 +73,6 @@ export function SearchBox({
             !focused && "max-h-[30px]"
           )}
         />
-        {!hasValue && !focused ? (
-          <kbd
-            aria-hidden
-            className="pointer-events-none mt-[7px] mr-2 hidden h-4 min-w-4 shrink-0 items-center justify-center rounded border border-border bg-muted px-1 font-sans text-[10px] font-medium text-muted-foreground [@media(hover:hover)]:inline-flex"
-          >
-            S
-          </kbd>
-        ) : null}
         {hasValue ? (
           <div className="flex h-[30px] shrink-0 items-center gap-0.5">
             <Button
