@@ -15,12 +15,14 @@ export function SearchBox({
   onChange,
   resultCount,
   onSaveAsFilter,
+  inputId,
   className,
 }: {
   value: string
   onChange: (v: string) => void
   resultCount: number
   onSaveAsFilter: () => void
+  inputId?: string
   className?: string
 }) {
   const ref = React.useRef<HTMLTextAreaElement>(null)
@@ -36,16 +38,17 @@ export function SearchBox({
   }, [value, focused])
 
   return (
-    <div className={cn("relative h-10 min-w-0", className)}>
+    <div className={cn("relative h-8 min-w-0", className)}>
       <div
         className={cn(
-          "absolute inset-x-0 top-0 z-30 flex items-start gap-1 rounded-2xl border border-input bg-card py-[3px] pr-1 pl-3 shadow-xs transition-shadow",
-          focused && "border-ring shadow-lg ring-3 ring-ring/30"
+          "absolute inset-x-0 top-0 z-30 flex items-start gap-1 rounded-[16px] border border-input bg-background pr-0.5 pl-3 transition-shadow",
+          focused && "border-foreground/30 shadow-lg ring-3 ring-ring/20"
         )}
       >
-        <SearchIcon className="mt-2 size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <SearchIcon className="mt-[8px] size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <textarea
           ref={ref}
+          id={inputId}
           rows={1}
           value={value}
           aria-label="Search or prompt to sort and filter"
@@ -58,25 +61,43 @@ export function SearchBox({
               e.preventDefault()
               if (e.metaKey || e.ctrlKey) onSaveAsFilter()
             }
-            if (e.key === "Escape" && hasValue) onChange("")
+            // Esc clears the text; Esc on an empty field leaves it, so page shortcuts work again.
+            if (e.key === "Escape") {
+              if (hasValue) onChange("")
+              else e.currentTarget.blur()
+            }
           }}
           className={cn(
-            "min-h-8 flex-1 resize-none overflow-hidden bg-transparent px-1 py-1.5 text-sm leading-5 outline-none placeholder:text-muted-foreground",
+            "min-h-[30px] flex-1 resize-none overflow-hidden bg-transparent px-1 py-[5px] text-[13px] leading-5 outline-none placeholder:text-muted-foreground",
             // Collapse to a single truncated-looking line when not focused.
-            !focused && "max-h-8"
+            !focused && "max-h-[30px]"
           )}
         />
+        {!hasValue && !focused ? (
+          <kbd
+            aria-hidden
+            className="pointer-events-none mt-[7px] mr-2 hidden h-4 min-w-4 shrink-0 items-center justify-center rounded border border-border bg-muted px-1 font-sans text-[10px] font-medium text-muted-foreground [@media(hover:hover)]:inline-flex"
+          >
+            S
+          </kbd>
+        ) : null}
         {hasValue ? (
-          <div className="flex h-8 shrink-0 items-center gap-1">
-            <Button variant="ghost" size="icon-sm" aria-label="Clear search" onClick={() => onChange("")}>
+          <div className="flex h-[30px] shrink-0 items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="rounded-full"
+              aria-label="Clear search"
+              onClick={() => onChange("")}
+            >
               <XIcon />
             </Button>
             {showSave ? (
               <Button
                 variant="secondary"
-                size="sm"
+                size="xs"
                 onClick={onSaveAsFilter}
-                className="whitespace-nowrap"
+                className="rounded-full px-2.5 whitespace-nowrap"
                 title="Save as filter (⌘↵)"
               >
                 <BookmarkPlusIcon />

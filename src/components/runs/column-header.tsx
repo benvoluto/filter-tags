@@ -21,7 +21,7 @@ export type SortDir = "asc" | "desc"
 export type SortRule = { key: ColumnDef["key"]; dir: SortDir }
 
 const iconButton =
-  "inline-flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-background hover:text-foreground hover:shadow-xs focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none data-popup-open:bg-background data-popup-open:text-primary data-popup-open:opacity-100"
+  "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-all hover:bg-background hover:text-foreground hover:shadow-xs focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none data-popup-open:bg-background data-popup-open:text-foreground data-popup-open:opacity-100"
 
 /** Revealed on hover for pointer devices; always visible on touch. */
 const revealOnHover = "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/col:opacity-100"
@@ -63,8 +63,8 @@ export function ColumnHeader({
       aria-sort={sortDir === "asc" ? "ascending" : sortDir === "desc" ? "descending" : undefined}
       style={{ minWidth: column.minWidth }}
       className={cn(
-        "group/col sticky top-0 z-10 h-12 border-b border-border bg-muted/70 px-2 text-left align-middle font-semibold whitespace-nowrap text-secondary-foreground backdrop-blur transition-colors first:rounded-tl-[calc(var(--radius)-2px)] last:rounded-tr-[calc(var(--radius)-2px)]",
-        (hovered || filterOpen) && "bg-sky-100/70 text-foreground dark:bg-sky-400/15",
+        "group/col sticky top-0 z-10 h-10 border-b border-border bg-neutral-50 px-1.5 text-left align-middle font-semibold whitespace-nowrap text-foreground backdrop-blur transition-colors dark:bg-muted",
+        (hovered || filterOpen) && "bg-neutral-100 dark:bg-accent",
         thProps.className
       )}
     >
@@ -74,13 +74,13 @@ export function ColumnHeader({
           onClick={cycle}
           title="Click to sort, Shift+click to add to sort"
           className={cn(
-            "inline-flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-1 text-sm hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+            "inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-[13px] hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
             right && "flex-row-reverse"
           )}
         >
           <span className="truncate">{column.label}</span>
           {sortDir ? (
-            <span className="inline-flex items-center text-primary">
+            <span className="inline-flex items-center text-muted-foreground">
               {sortDir === "asc" ? <ArrowUpIcon className="size-3.5" /> : <ArrowDownIcon className="size-3.5" />}
               {multiSort ? <sup className="text-[10px] font-bold">{sortIndex + 1}</sup> : null}
             </span>
@@ -117,15 +117,15 @@ export function ColumnHeader({
           <Popover open={filterOpen} onOpenChange={setFilterOpen}>
             <PopoverTrigger
               aria-label={`Filter by ${column.label}`}
-              className={cn(iconButton, filtered ? "text-primary" : revealOnHover)}
+              className={cn(iconButton, filtered ? "text-foreground" : revealOnHover)}
             >
-              <FilterIcon className={cn("size-3.5", filtered && "fill-primary/25")} />
+              <FilterIcon className={cn("size-3.5", filtered && "fill-foreground/20")} />
             </PopoverTrigger>
             <PopoverContent
               anchor={thRef}
               align="start"
               sideOffset={2}
-              className="w-[22rem] max-w-[calc(100vw-2rem)] p-3 font-normal"
+              className="w-auto max-w-[calc(100vw-2rem)] p-3 font-normal"
             >
               <FilterEditor
                 column={column.key}

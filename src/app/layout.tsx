@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from "next"
-import { Sora } from "next/font/google"
+import { Inter } from "next/font/google"
 
 import { TooltipProvider } from "@/components/ui/tooltip"
 import "./globals.css"
 
-const sora = Sora({ variable: "--font-sora", subsets: ["latin"] })
+const inter = Inter({ variable: "--font-inter", subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Flow Runs · Filter prototype",
@@ -18,7 +18,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sora.variable} h-full antialiased`}>
+    <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col" suppressHydrationWarning>
         <TooltipProvider delay={300}>{children}</TooltipProvider>
       </body>
