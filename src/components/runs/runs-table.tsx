@@ -59,7 +59,8 @@ function compareRows(a: RunRow, b: RunRow, rules: SortRule[]) {
   return 0
 }
 
-export type PrototypeVariant = "filters" | "views"
+/** "filters": filters only · "quick": filters + partial (quick) filters · "views": filters, quick filters + saved views */
+export type PrototypeVariant = "filters" | "quick" | "views"
 
 export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant }) {
   const [query, setQuery] = React.useState("")
@@ -145,8 +146,9 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
 
   const filteredColumns = new Set(filters.flatMap(filterColumns))
   // A partial filter disappears once its column has a filter (and returns when that filter is
-  // removed); all of them hide once more than three filters are applied.
-  const quickFilters = filters.length > 3 ? [] : QUICK_FILTERS.filter((key) => !filteredColumns.has(key))
+  // removed); all of them hide once more than three filters are applied. Not shown in "filters only".
+  const quickFilters =
+    variant === "filters" || filters.length > 3 ? [] : QUICK_FILTERS.filter((key) => !filteredColumns.has(key))
 
   // Saved views (views variant only)
   const showViews = variant === "views"

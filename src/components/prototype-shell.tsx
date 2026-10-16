@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 
 const VARIANTS: { value: PrototypeVariant; label: string }[] = [
   { value: "filters", label: "Filters only" },
+  { value: "quick", label: "With quick filters" },
   { value: "views", label: "Filters and views" },
 ]
 

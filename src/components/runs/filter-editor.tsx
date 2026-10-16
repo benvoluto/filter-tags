@@ -146,6 +146,21 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
     }
   }
 
+  /**
+   * Zero-row check for a whole column in row i: true when no remaining row has any value in that
+   * column, i.e. every criterion offered for it would return zero rows. (Equivalent to probing
+   * "<column> is not empty", which avoids trying each value.)
+   */
+  const columnReturnsNoRowsFor = (i: number) => {
+    if (!probe) return undefined
+    return (column: ColumnKey) => {
+      const candidate = active
+        .map((r, j) => (j === i ? { ...r, column, comparator: "is_not_empty" as const, values: [] } : r))
+        .filter(rowComplete)
+      return !probe(draftFrom(candidate), initial?.id)
+    }
+  }
+
   const toBasic = () => {
     setRows((rs) => rs.slice(0, 1))
     setAdvanced(false)
@@ -217,6 +232,7 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
               onValues={(values) => updateRow(i, { values })}
               onRemove={rows.length > 1 ? () => setRows((rs) => rs.filter((_, j) => j !== i)) : undefined}
               returnsNoRows={returnsNoRowsFor(i)}
+              columnReturnsNoRows={columnReturnsNoRowsFor(i)}
               autoFocus={i === rows.length - 1 && i > 0}
             />
           ))}
@@ -267,6 +283,7 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
   // ── Basic, step 1: pick the filter type (column) ──────────────────────────────────────────────
   const row = rows[0]
   if (!row.column) {
+    const columnIsEmpty = columnReturnsNoRowsFor(0)
     return (
       <div className="flex w-[22rem] max-w-full flex-col gap-2">
         <Command className="rounded-[0.2em]! border border-border bg-background p-0">
@@ -282,11 +299,19 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
             <CommandGroup>
               {COLUMNS.map((c) => {
                 const Icon = COLUMN_ICONS[c.key]
+                const empty = columnIsEmpty?.(c.key) ?? false
                 return (
-                  <CommandItem key={c.key} value={c.label} onSelect={() => changeColumn(0, c.key)}>
-                    <Icon className="text-muted-foreground" />
+                  <CommandItem
+                    key={c.key}
+                    value={c.label}
+                    onSelect={() => changeColumn(0, c.key)}
+                    title={empty ? NO_ROWS_COLUMN_TITLE : undefined}
+                    className={cn(empty && "text-amber-600/70 data-selected:bg-amber-50 data-selected:text-amber-700/80 dark:text-amber-300/60 dark:data-selected:bg-amber-400/10 dark:data-selected:text-amber-300/80")}
+                  >
+                    <Icon className={empty ? "text-current" : "text-muted-foreground"} />
                     <span className="flex-1">{c.label}</span>
-                    <span className="text-xs text-muted-foreground">{c.type}</span>
+                    {empty ? <span className="sr-only"> (no matching rows)</span> : null}
+                    <span className={cn("text-xs", empty ? "text-current" : "text-muted-foreground")}>{c.type}</span>
                   </CommandItem>
                 )
               })}
@@ -389,6 +414,7 @@ function ConditionRow({
   onValues,
   onRemove,
   returnsNoRows,
+  columnReturnsNoRows,
   autoFocus,
 }: {
   index: number
@@ -399,6 +425,7 @@ function ConditionRow({
   onValues: (values: string[]) => void
   onRemove?: () => void
   returnsNoRows?: (value: string) => boolean
+  columnReturnsNoRows?: (column: ColumnKey) => boolean
   autoFocus?: boolean
 }) {
   return (
@@ -410,7 +437,13 @@ function ConditionRow({
           <JoinSelect value={row.join} onChange={onJoin} />
         )}
       </div>
-      <ColumnSelect value={row.column} onChange={onColumn} autoFocus={autoFocus} className="w-36 shrink-0" />
+      <ColumnSelect
+        value={row.column}
+        onChange={onColumn}
+        isEmpty={columnReturnsNoRows}
+        autoFocus={autoFocus}
+        className="w-36 shrink-0"
+      />
       {row.column ? (
         <ComparatorSelect
           column={row.column}
@@ -484,16 +517,21 @@ function JoinSelect({ value, onChange }: { value: Join; onChange: (join: Join) =
   )
 }
 
+const NO_ROWS_COLUMN_TITLE = "Every value here would return no rows with the current filters"
+
 const COLUMN_ITEMS = COLUMNS.map((c) => ({ value: c.key, label: c.label }))
 
 function ColumnSelect({
   value,
   onChange,
+  isEmpty,
   autoFocus,
   className,
 }: {
   value: ColumnKey | null
   onChange: (column: ColumnKey) => void
+  /** Flags columns where every criterion would return zero rows (shown in pale amber). */
+  isEmpty?: (column: ColumnKey) => boolean
   autoFocus?: boolean
   className?: string
 }) {
@@ -507,10 +545,20 @@ function ColumnSelect({
       <SelectContent alignItemWithTrigger={false} align="start">
         {COLUMNS.map((c) => {
           const ItemIcon = COLUMN_ICONS[c.key]
+          const empty = isEmpty?.(c.key) ?? false
           return (
-            <SelectItem key={c.key} value={c.key}>
-              <ItemIcon className="text-muted-foreground" />
+            <SelectItem
+              key={c.key}
+              value={c.key}
+              title={empty ? NO_ROWS_COLUMN_TITLE : undefined}
+              className={cn(
+                empty &&
+                  "text-amber-600/70 focus:bg-amber-50 focus:text-amber-700/80 not-data-[variant=destructive]:focus:**:text-amber-700/80 dark:text-amber-300/60 dark:focus:bg-amber-400/10"
+              )}
+            >
+              <ItemIcon className={empty ? "text-current" : "text-muted-foreground"} />
               {c.label}
+              {empty ? <span className="sr-only"> (no matching rows)</span> : null}
             </SelectItem>
           )
         })}

@@ -3,7 +3,6 @@
 import * as React from "react"
 import { CheckIcon, ChevronDownIcon, LayersIcon, PencilIcon } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +34,7 @@ export function ViewsMenu({
 }) {
   const selected = views.find((v) => v.id === selectedId) ?? null
   const [renaming, setRenaming] = React.useState(false)
+  const pillRef = React.useRef<HTMLDivElement>(null)
 
   if (selected && renaming) {
     return (
@@ -48,27 +48,46 @@ export function ViewsMenu({
     )
   }
 
+  // One pill: [menu trigger: icon + name] [rename] [menu trigger: chevron]. The rename button sits
+  // between two triggers of the same menu (a button can't be nested inside the trigger button).
+  const segment =
+    "flex h-full items-center outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
   return (
-    <div className="flex items-center gap-0.5">
+    <div
+      ref={pillRef}
+      className="flex h-8 max-w-[18rem] min-w-0 items-center overflow-hidden rounded-full border border-border bg-background text-[13px] font-medium transition-colors hover:bg-muted has-aria-expanded:bg-muted dark:border-input"
+    >
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={
-            <Button
-              variant="outline"
-              className="h-8 max-w-[16rem] gap-1.5 rounded-full px-3 text-[13px] font-medium aria-expanded:bg-muted"
-            />
-          }
+          className={cn(segment, "min-w-0 gap-1.5 rounded-l-full pl-3", selected ? "pr-1" : "pr-1.5")}
+          aria-label={selected ? `View: ${selected.name}${edited ? " (edited)" : ""}` : "Views"}
         >
-          <LayersIcon className="size-3.5 text-muted-foreground" />
+          <LayersIcon className="size-3.5 shrink-0 text-muted-foreground" />
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
             {selected ? selected.name : "Views"}
           </span>
           {selected && edited ? (
-            <span className="size-1.5 shrink-0 rounded-full bg-amber-500" aria-label="(edited)" title="Edited since saved" />
+            <span className="size-1.5 shrink-0 rounded-full bg-amber-500" title="Edited since saved" />
           ) : null}
+        </DropdownMenuTrigger>
+        {selected ? (
+          <button
+            type="button"
+            aria-label={`Rename ${selected.name}`}
+            title="Rename view"
+            onClick={() => setRenaming(true)}
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-background hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <PencilIcon className="size-3" />
+          </button>
+        ) : null}
+        <DropdownMenuTrigger
+          className={cn(segment, "shrink-0 rounded-r-full pr-2.5", selected ? "pl-1" : "pl-0")}
+          aria-label="Choose a view"
+        >
           <ChevronDownIcon className="size-3.5 text-muted-foreground" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[22rem] max-w-[calc(100vw-2rem)]">
+        <DropdownMenuContent anchor={pillRef} align="start" className="w-[22rem] max-w-[calc(100vw-2rem)]">
           <DropdownMenuGroup>
             <DropdownMenuLabel>Saved views</DropdownMenuLabel>
             {views.length === 0 ? (
@@ -101,18 +120,6 @@ export function ViewsMenu({
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
-      {selected ? (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Rename ${selected.name}`}
-          title="Rename view"
-          onClick={() => setRenaming(true)}
-          className="rounded-full text-muted-foreground hover:text-foreground"
-        >
-          <PencilIcon className="size-3.5" />
-        </Button>
-      ) : null}
     </div>
   )
 }
