@@ -1,44 +1,34 @@
 "use client"
 
 import * as React from "react"
-import { PlusIcon } from "lucide-react"
+import Button from "@mui/material/Button"
+import AddIcon from "@mui/icons-material/Add"
 
-import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { COLUMN_ICONS } from "@/lib/column-icons"
 import { COLUMN_MAP, type ColumnKey } from "@/lib/data"
 import { FilterEditor, type FilterDraft } from "./filter-editor"
+import { FilterPopover } from "./filter-popover"
 
-/** Dashed "partial filter" pill style, shared with the Add filter button. */
-export const dashedPillClass =
-  "h-8 gap-1 rounded-full border-dashed border-input bg-background px-3 text-[13px] text-foreground/85 hover:border-foreground/30 hover:bg-muted aria-expanded:border-foreground/30 aria-expanded:bg-muted dark:bg-background"
-
-/**
- * A partial filter: a column already chosen, criteria not yet set. Clicking it opens the
- * filter editor preset to that column (same as the column-header filter entry point).
- */
+/** A partial filter: column chosen, criteria pending. Dashed button (theme variant) + editor popover. */
 export function QuickFilter({ column, onAdd }: { column: ColumnKey; onAdd: (draft: FilterDraft) => void }) {
-  const [open, setOpen] = React.useState(false)
+  const [anchor, setAnchor] = React.useState<HTMLElement | null>(null)
   const Icon = COLUMN_ICONS[column]
   const label = COLUMN_MAP[column].label
-
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button variant="outline" className={dashedPillClass} />} aria-label={`Filter by ${label}`}>
-        <PlusIcon className="size-3.5 text-muted-foreground" />
-        <Icon className="size-3.5 text-muted-foreground" />
+    <>
+      <Button variant="dashed" startIcon={<AddIcon />} endIcon={<Icon />} aria-label={`Filter by ${label}`} onClick={(e) => setAnchor(e.currentTarget)}>
         {label}
-      </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6} className="w-auto max-w-[calc(100vw-2rem)] p-3">
+      </Button>
+      <FilterPopover open={Boolean(anchor)} anchorEl={anchor} onClose={() => setAnchor(null)}>
         <FilterEditor
           column={column}
-          onCancel={() => setOpen(false)}
+          onCancel={() => setAnchor(null)}
           onSubmit={(draft) => {
             onAdd(draft)
-            setOpen(false)
+            setAnchor(null)
           }}
         />
-      </PopoverContent>
-    </Popover>
+      </FilterPopover>
+    </>
   )
 }

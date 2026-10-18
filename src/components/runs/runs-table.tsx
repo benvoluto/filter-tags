@@ -1,44 +1,50 @@
 "use client"
 
 import * as React from "react"
-import { BookmarkPlusIcon, FilterXIcon, PlusIcon } from "lucide-react"
+import Button from "@mui/material/Button"
+import Chip, { type ChipProps } from "@mui/material/Chip"
+import FormControlLabel from "@mui/material/FormControlLabel"
+import IconButton from "@mui/material/IconButton"
+import Link from "@mui/material/Link"
+import Pagination from "@mui/material/Pagination"
+import Stack from "@mui/material/Stack"
+import Switch from "@mui/material/Switch"
+import Table from "@mui/material/Table"
+import TableBody from "@mui/material/TableBody"
+import TableCell from "@mui/material/TableCell"
+import TableContainer from "@mui/material/TableContainer"
+import TableHead from "@mui/material/TableHead"
+import TableRow from "@mui/material/TableRow"
+import Toolbar from "@mui/material/Toolbar"
+import Typography from "@mui/material/Typography"
+import AddIcon from "@mui/icons-material/Add"
+import BookmarkAddOutlinedIcon from "@mui/icons-material/BookmarkAddOutlined"
+import FilterAltOffOutlinedIcon from "@mui/icons-material/FilterAltOffOutlined"
 
-import { Button } from "@/components/ui/button"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { COLUMNS, ROWS, formatCell, isEmptyValue, type ColumnKey, type RunRow } from "@/lib/data"
 import { filterColumns, matchFilters, matchSearch, newFilterId, type Filter, type MatchMode } from "@/lib/filters"
-import { cn } from "@/lib/utils"
-import { ColumnHeader, type SortDir, type SortRule } from "./column-header"
+import type { SortDir, SortRule } from "@/lib/sort"
+import { makeView, viewMatchesState, type SavedView } from "@/lib/views"
+import { ColumnHeader } from "./column-header"
 import { FilterChip } from "./filter-chip"
 import { FilterEditor, type FilterDraft } from "./filter-editor"
+import { FilterPopover } from "./filter-popover"
 import { FilterProbeProvider } from "./filter-probe"
-import { dashedPillClass, QuickFilter } from "./quick-filter"
+import { QuickFilter } from "./quick-filter"
 import { SearchBox } from "./search-box"
 import { ViewsMenu } from "./views-menu"
-import { makeView, viewMatchesState, type SavedView } from "@/lib/views"
+
+const PAGE_SIZE = 17 // 50 rows → 3 pages
 
 /** Partial filters shown next to the search box: column chosen, criteria pending. */
 const QUICK_FILTERS: ColumnKey[] = ["customer", "trigger", "duration"]
 
-const SEARCH_INPUT_ID = "runs-search"
-
-const PAGE_SIZE = 17 // 50 rows → 3 pages
-
-// Soft, square-ish status pills in the style of Notable's disposition tags.
-const STATUS_STYLES: Record<string, string> = {
-  Completed: "bg-green-50 text-green-600 dark:bg-green-400/10 dark:text-green-400",
-  Failed: "bg-red-50 text-red-500 dark:bg-red-400/10 dark:text-red-400",
-  "Needs Review": "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300",
-  Running: "bg-blue-50 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300",
-  Cancelled: "bg-neutral-100 text-neutral-500 dark:bg-white/8 dark:text-neutral-400",
+const STATUS_COLOR: Record<string, ChipProps["color"]> = {
+  Completed: "success",
+  Failed: "error",
+  "Needs Review": "warning",
+  Running: "info",
+  Cancelled: "default",
 }
 
 /** Columns rendered as underlined entity links, like Notable's "Initiated By" / "Recipient". */
@@ -46,39 +52,37 @@ const LINK_COLUMNS = new Set<ColumnKey>(["runId", "customer", "owner"])
 
 function compareRows(a: RunRow, b: RunRow, sort: SortRule | null) {
   if (!sort) return 0
-  const { key, dir } = sort
-  const av = a[key]
-  const bv = b[key]
+  const av = a[sort.key]
+  const bv = b[sort.key]
   // Empty values always sink to the bottom regardless of direction.
   if (isEmptyValue(av) && isEmptyValue(bv)) return 0
   if (isEmptyValue(av)) return 1
   if (isEmptyValue(bv)) return -1
   const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv))
-  return dir === "asc" ? cmp : -cmp
+  return sort.dir === "asc" ? cmp : -cmp
 }
 
-/** "filters": filters only · "quick": filters + partial (quick) filters · "views": filters, quick filters + saved views */
+/** "filters": filters only · "quick": + partial (quick) filters · "views": + quick filters and saved views */
 export type PrototypeVariant = "filters" | "quick" | "views"
 
 export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant }) {
   const [query, setQuery] = React.useState("")
   const [filters, setFilters] = React.useState<Filter[]>([])
-  // One sorted column at a time (or none).
   const [sort, setSort] = React.useState<SortRule | null>({ key: "started", dir: "desc" })
-  const [page, setPage] = React.useState(0)
-  const [hoveredCol, setHoveredCol] = React.useState<ColumnKey | null>(null)
-  const [addOpen, setAddOpen] = React.useState(false)
   const [matchMode, setMatchMode] = React.useState<MatchMode>("all")
+  const [page, setPage] = React.useState(1)
+  const [addAnchor, setAddAnchor] = React.useState<HTMLButtonElement | null>(null)
+  const [addOpen, setAddOpen] = React.useState(false)
   const [views, setViews] = React.useState<SavedView[]>([])
   const [selectedViewId, setSelectedViewId] = React.useState<string | null>(null)
+  const searchRef = React.useRef<HTMLTextAreaElement>(null)
   const toolbarRef = React.useRef<HTMLDivElement>(null)
   const leftRef = React.useRef<HTMLDivElement>(null)
   const rightRef = React.useRef<HTMLDivElement>(null)
   const stackActions = useStackedActions(toolbarRef, leftRef, rightRef)
 
-  // Single-key shortcuts, active only when nothing on the page has focus:
-  //   F → open Add filter · S → focus search · C → clear all filters
-  const openedByShortcut = React.useRef(false)
+  // Single-key shortcuts, only when nothing on the page has focus: F add filter · S search · C clear.
+  // (MUI popovers restore focus to whatever was focused when they opened — the body, for F.)
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.isComposing) return
@@ -87,15 +91,14 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
       const key = e.key.toLowerCase()
       if (key === "f") {
         e.preventDefault()
-        openedByShortcut.current = true
         setAddOpen(true)
       } else if (key === "s") {
         e.preventDefault()
-        document.getElementById(SEARCH_INPUT_ID)?.focus()
+        searchRef.current?.focus()
       } else if (key === "c") {
         e.preventDefault()
         setFilters((fs) => (fs.length ? [] : fs))
-        setPage(0)
+        setPage(1)
       }
     }
     document.addEventListener("keydown", onKeyDown)
@@ -103,39 +106,34 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
   }, [])
 
   const rows = React.useMemo(() => {
-    // The search box always narrows results; the match mode only governs how filters combine.
     const visible = ROWS.filter((r) => matchFilters(r, filters, matchMode) && matchSearch(r, query))
     return [...visible].sort((a, b) => compareRows(a, b, sort))
   }, [filters, matchMode, query, sort])
 
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
-  const currentPage = Math.min(page, pageCount - 1)
-  const pageRows = rows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE)
+  const currentPage = Math.min(page, pageCount)
+  const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const addFilter = (draft: FilterDraft) => {
     setFilters((fs) => [...fs, { ...draft, id: newFilterId() }])
-    setPage(0)
+    setPage(1)
   }
   const updateFilter = (id: string, draft: FilterDraft) => {
     setFilters((fs) => fs.map((f) => (f.id === id ? { ...draft, id } : f)))
-    setPage(0)
+    setPage(1)
   }
   const removeFilter = (id: string) => setFilters((fs) => fs.filter((f) => f.id !== id))
-
   const saveSearchAsFilter = () => {
     const text = query.trim()
     if (!text) return
     addFilter({ kind: "search", column: "runId", comparator: "contains", values: [text] })
     setQuery("")
   }
-
   const applySort = (key: ColumnKey, dir: SortDir | null) => setSort(dir ? { key, dir } : null)
 
   const filteredColumns = new Set(filters.flatMap(filterColumns))
-  // A partial filter disappears once its column has a filter (and returns when that filter is
-  // removed); all of them hide once more than three filters are applied. Not shown in "filters only".
-  const quickFilters =
-    variant === "filters" || filters.length > 3 ? [] : QUICK_FILTERS.filter((key) => !filteredColumns.has(key))
+  // Partial filters: hidden in "filters only", once their column is filtered, or past three filters.
+  const quickFilters = variant === "filters" || filters.length > 3 ? [] : QUICK_FILTERS.filter((k) => !filteredColumns.has(k))
 
   // Saved views (views variant only)
   const showViews = variant === "views"
@@ -148,22 +146,23 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     setFilters(view.filters.map((f) => ({ ...f, id: newFilterId() })))
     setSort(view.sort)
     setMatchMode(view.matchMode)
-    setPage(0)
+    setPage(1)
   }
   const saveView = () => {
     const view = makeView(`View ${views.length + 1}`, filters, sort, matchMode)
     setViews((vs) => [...vs, view])
     setSelectedViewId(view.id)
   }
-  const start = rows.length ? currentPage * PAGE_SIZE + 1 : 0
-  const end = currentPage * PAGE_SIZE + pageRows.length
+
+  const start = rows.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0
+  const end = (currentPage - 1) * PAGE_SIZE + pageRows.length
 
   return (
     <FilterProbeProvider filters={filters} matchMode={matchMode} query={query}>
-      <div className="flex flex-col gap-3">
-        {/* Toolbar: [search · partial filters · chips · add filter] ···· [clear filters · match all] */}
-        <div ref={toolbarRef} className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div ref={leftRef} className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+      <Stack spacing={1.5}>
+        {/* [views · search · partial filters · chips · Add filter] ··· [Clear · Match all · Save view] */}
+        <Toolbar variant="filters" ref={toolbarRef}>
+          <Stack ref={leftRef} direction="row" spacing={1} useFlexGap>
             {showViews ? (
               <ViewsMenu
                 views={views}
@@ -177,283 +176,158 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
               value={query}
               onChange={(v) => {
                 setQuery(v)
-                setPage(0)
+                setPage(1)
               }}
               resultCount={rows.length}
               onSaveAsFilter={saveSearchAsFilter}
-              inputId={SEARCH_INPUT_ID}
-              className="w-full sm:w-[18rem] lg:w-[22rem]"
+              inputRef={searchRef}
             />
-
-            {quickFilters.length ? (
-              <div role="group" aria-label="Quick filters" className="flex flex-wrap items-center gap-2">
-                {quickFilters.map((key) => (
-                  <QuickFilter key={key} column={key} onAdd={addFilter} />
-                ))}
-              </div>
-            ) : null}
-
-            {filters.map((f) => (
-              <FilterChip
-                key={f.id}
-                filter={f}
-                onChange={(d) => updateFilter(f.id, d)}
-                onRemove={() => removeFilter(f.id)}
-              />
+            {quickFilters.map((key) => (
+              <QuickFilter key={key} column={key} onAdd={addFilter} />
             ))}
+            {filters.map((f) => (
+              <FilterChip key={f.id} filter={f} onChange={(d) => updateFilter(f.id, d)} onRemove={() => removeFilter(f.id)} />
+            ))}
+            <Button variant="dashed" startIcon={<AddIcon />} ref={setAddAnchor} onClick={() => setAddOpen(true)}>
+              Add filter
+            </Button>
+            <FilterPopover open={addOpen && Boolean(addAnchor)} anchorEl={addAnchor} onClose={() => setAddOpen(false)}>
+              <FilterEditor
+                onCancel={() => setAddOpen(false)}
+                onSubmit={(draft) => {
+                  addFilter(draft)
+                  setAddOpen(false)
+                }}
+              />
+            </FilterPopover>
+          </Stack>
 
-            <Popover
-              open={addOpen}
-              onOpenChange={(open) => {
-                setAddOpen(open)
-                if (open) openedByShortcut.current = false
-              }}
-            >
-              <PopoverTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    className={dashedPillClass}
-                  />
-                }
-              >
-                <PlusIcon className="size-3.5 text-muted-foreground" />
-                Add filter
-              </PopoverTrigger>
-              <PopoverContent
-                align="start"
-                sideOffset={6}
-                className="w-auto max-w-[calc(100vw-2rem)] p-3"
-                // When opened with F, don't hand focus back to the button on close, so the page returns
-                // to the "nothing focused" state and the shortcuts keep working back to back.
-                finalFocus={() => !openedByShortcut.current}
-              >
-                <FilterEditor
-                  onCancel={() => setAddOpen(false)}
-                  onSubmit={(draft) => {
-                    addFilter(draft)
-                    setAddOpen(false)
-                  }}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          {/* Actions stay at the right edge: one row (Clear · Match) while the filters fit on one
-              line, stacked (Match above Clear) once they wrap. Below sm they sit in a row underneath.
-              In the views variant, Save view sits at the far right. */}
-          <div ref={rightRef} className="flex shrink-0 items-start justify-end gap-2">
-            <div
-              className={cn(
-                "flex items-center justify-end gap-2 whitespace-nowrap",
-                // The views variant keeps its compact actions on one line; filters-only stacks them.
-                stackActions && !showViews && "sm:flex-col-reverse sm:items-end"
-              )}
-            >
+          <Stack ref={rightRef} direction="row" spacing={1}>
+            <Stack direction={stackActions && !showViews ? "column-reverse" : "row"} spacing={1}>
               {filters.length > 0 && showViews ? (
-                <Button
-                  data-toolbar-action
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Clear filters"
-                  title="Clear filters"
-                  className="rounded-full text-muted-foreground hover:text-foreground [&_svg:not([class*='size-'])]:size-3.5"
-                  onClick={() => setFilters([])}
-                >
-                  <FilterXIcon />
-                </Button>
+                <IconButton data-toolbar-action aria-label="Clear filters" title="Clear filters" onClick={() => setFilters([])}>
+                  <FilterAltOffOutlinedIcon />
+                </IconButton>
               ) : filters.length > 0 ? (
-                <Button
-                  data-toolbar-action
-                  variant="ghost"
-                  className="h-8 gap-1.5 rounded-full px-2 text-xs font-normal text-muted-foreground hover:text-foreground [&_svg:not([class*='size-'])]:size-3.5"
-                  onClick={() => setFilters([])}
-                >
-                  <FilterXIcon />
+                <Button data-toolbar-action variant="text" startIcon={<FilterAltOffOutlinedIcon />} onClick={() => setFilters([])}>
                   Clear filters
                 </Button>
               ) : null}
-
-              <MatchAllToggle
+              <FormControlLabel
+                data-toolbar-action
                 label={showViews ? "Match all" : "Match all filters"}
-                checked={matchMode === "all"}
-                onChange={(all) => {
-                  setMatchMode(all ? "all" : "any")
-                  setPage(0)
-                }}
+                title={matchMode === "all" ? "Rows must match every filter" : "Rows may match any filter"}
+                control={
+                  <Switch
+                    checked={matchMode === "all"}
+                    onChange={(_, all) => {
+                      setMatchMode(all ? "all" : "any")
+                      setPage(1)
+                    }}
+                  />
+                }
               />
-            </div>
-
+            </Stack>
             {canSaveView ? (
               <Button
                 data-toolbar-action
+                variant="contained"
+                startIcon={<BookmarkAddOutlinedIcon />}
                 onClick={saveView}
-                className="h-8 gap-1.5 rounded-full px-3 text-xs whitespace-nowrap [&_svg:not([class*='size-'])]:size-3.5"
                 title={selectedView ? `Save as a new view (${selectedView.name} has been edited)` : undefined}
               >
-                <BookmarkPlusIcon />
                 Save view
               </Button>
             ) : null}
-          </div>
-        </div>
+          </Stack>
+        </Toolbar>
 
-        {/* Table */}
-        <div className="overflow-hidden rounded-md border border-border bg-card">
-          <div className="relative w-full overflow-x-auto">
-            <table className="w-full border-separate border-spacing-0 text-[13px]" onMouseLeave={() => setHoveredCol(null)}>
-              <thead>
-                <tr>
-                  {COLUMNS.map((col, i) => {
+        <TableContainer>
+          <Table aria-label="Flow runs">
+            <TableHead>
+              <TableRow>
+                {COLUMNS.map((col) => (
+                  <ColumnHeader
+                    key={col.key}
+                    column={col}
+                    sortDir={sort?.key === col.key ? sort.dir : undefined}
+                    filtered={filteredColumns.has(col.key)}
+                    onSort={(dir) => applySort(col.key, dir)}
+                    onAddFilter={addFilter}
+                  />
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {pageRows.map((row) => (
+                <TableRow key={row.runId} hover>
+                  {COLUMNS.map((col) => {
+                    const value = row[col.key]
                     return (
-                      <ColumnHeader
-                        key={col.key}
-                        column={col}
-                        sortDir={sort?.key === col.key ? sort.dir : undefined}
-                        filtered={filteredColumns.has(col.key)}
-                        hovered={hoveredCol === col.key}
-                        onSort={(dir) => applySort(col.key, dir)}
-                        onAddFilter={addFilter}
-                        thProps={{
-                          onMouseEnter: () => setHoveredCol(col.key),
-                          className: cn(i === 0 && "left-0 z-20 shadow-[1px_0_0_var(--border)] md:static md:shadow-none"),
-                        }}
-                      />
+                      <TableCell key={col.key} align={col.align ?? "left"}>
+                        {isEmptyValue(value) ? (
+                          <Typography variant="body2" color="text.secondary">
+                            —
+                          </Typography>
+                        ) : col.key === "status" ? (
+                          <Chip variant="soft" size="small" color={STATUS_COLOR[value as string]} label={value as string} />
+                        ) : col.key === "errors" && (value as number) > 0 ? (
+                          <Typography variant="subtitle2" color="error">
+                            {formatCell(col, value)}
+                          </Typography>
+                        ) : LINK_COLUMNS.has(col.key) ? (
+                          <Link href="#" onClick={(e) => e.preventDefault()}>
+                            {formatCell(col, value)}
+                          </Link>
+                        ) : (
+                          formatCell(col, value)
+                        )}
+                      </TableCell>
                     )
                   })}
-                </tr>
-              </thead>
-              <tbody>
-                {pageRows.map((row) => (
-                  <tr key={row.runId} className="group/row">
-                    {COLUMNS.map((col, i) => {
-                      const value = row[col.key]
-                      const hovered = hoveredCol === col.key
-                      return (
-                        <td
-                          key={col.key}
-                          onMouseEnter={() => setHoveredCol(col.key)}
-                          className={cn(
-                            "h-10 border-b border-border bg-card px-3 whitespace-nowrap text-foreground/90 transition-colors group-last/row:border-b-0 group-hover/row:bg-muted/70",
-                            col.align === "right" && "text-right tabular-nums",
-                            hovered && "bg-muted/50 group-hover/row:bg-muted",
-                            i === 0 && "sticky left-0 z-[1] tabular-nums shadow-[1px_0_0_var(--border)] md:static md:shadow-none",
-                            isEmptyValue(value) && "text-muted-foreground"
-                          )}
-                        >
-                          {col.key === "status" ? (
-                            <span
-                              className={cn(
-                                "inline-flex h-5 items-center rounded-[4px] px-1.5 text-[11px] font-semibold",
-                                STATUS_STYLES[value as string]
-                              )}
-                            >
-                              {value as string}
-                            </span>
-                          ) : col.key === "errors" && (value as number) > 0 ? (
-                            <span className="font-semibold text-red-500">{formatCell(col, value)}</span>
-                          ) : LINK_COLUMNS.has(col.key) && !isEmptyValue(value) ? (
-                            <a
-                              href="#"
-                              onClick={(e) => e.preventDefault()}
-                              className="underline decoration-foreground/40 underline-offset-[3px] hover:decoration-foreground"
-                            >
-                              {formatCell(col, value)}
-                            </a>
-                          ) : (
-                            formatCell(col, value)
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-                {pageRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={COLUMNS.length} className="h-40 bg-card text-center text-muted-foreground">
-                      No runs match these filters.
-                      {filters.length || query ? (
-                        <Button
-                          variant="link"
-                          onClick={() => {
-                            setFilters([])
-                            setQuery("")
-                          }}
-                        >
-                          Reset
-                        </Button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
-          <p className="text-[13px] text-muted-foreground">
-            {rows.length ? (
-              <>
-                Showing <span className="font-medium text-foreground">{start}–{end}</span> of{" "}
-              </>
-            ) : null}
-            <span className="font-medium text-foreground">{rows.length}</span> runs
-            {rows.length !== ROWS.length ? <> (filtered from {ROWS.length})</> : null}
-          </p>
-          <Pagination className="mx-0 w-auto">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  aria-disabled={currentPage === 0}
-                  className={cn(currentPage === 0 && "pointer-events-none opacity-50")}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setPage(Math.max(0, currentPage - 1))
-                  }}
-                />
-              </PaginationItem>
-              {Array.from({ length: pageCount }, (_, i) => (
-                <PaginationItem key={i}>
-                  <PaginationLink
-                    href="#"
-                    isActive={i === currentPage}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      setPage(i)
-                    }}
-                  >
-                    {i + 1}
-                  </PaginationLink>
-                </PaginationItem>
+                </TableRow>
               ))}
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  aria-disabled={currentPage >= pageCount - 1}
-                  className={cn(currentPage >= pageCount - 1 && "pointer-events-none opacity-50")}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setPage(Math.min(pageCount - 1, currentPage + 1))
-                  }}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
-      </div>
+              {pageRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={COLUMNS.length} align="center">
+                    <Typography variant="body2" color="text.secondary">
+                      No runs match these filters.
+                    </Typography>
+                    {filters.length || query ? (
+                      <Button
+                        variant="text"
+                        onClick={() => {
+                          setFilters([])
+                          setQuery("")
+                        }}
+                      >
+                        Reset
+                      </Button>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        <Toolbar variant="panelBar">
+          <Typography variant="body2" color="text.secondary">
+            {rows.length ? `Showing ${start}–${end} of ` : ""}
+            {rows.length} runs{rows.length !== ROWS.length ? ` (filtered from ${ROWS.length})` : ""}
+          </Typography>
+          <Pagination count={pageCount} page={currentPage} onChange={(_, p) => setPage(p)} />
+        </Toolbar>
+      </Stack>
     </FilterProbeProvider>
   )
 }
 
-const TOOLBAR_GAP = 8 // gap-2
+const TOOLBAR_GAP = 8
 
 /**
  * True when the toolbar's left items would wrap if the right-hand actions sat in a single row.
- * Measuring against the *row* width of the actions (not their current width) avoids flip-flopping
- * between layouts when stacking them frees up just enough room to unwrap.
+ * Measures the individual actions (their width doesn't change when stacked) to avoid flip-flopping.
  */
 function useStackedActions(
   toolbarRef: React.RefObject<HTMLDivElement | null>,
@@ -466,11 +340,8 @@ function useStackedActions(
     const left = leftRef.current
     const right = rightRef.current
     if (!toolbar || !left || !right) return
-    const rowWidth = (kids: Element[]) => {
-      const widths = kids.reduce((w, k) => w + k.getBoundingClientRect().width, 0)
-      return widths + TOOLBAR_GAP * Math.max(0, kids.length - 1)
-    }
-    // Measure the individual actions (they keep their width whether stacked or not).
+    const rowWidth = (kids: Element[]) =>
+      kids.reduce((w, k) => w + k.getBoundingClientRect().width, 0) + TOOLBAR_GAP * Math.max(0, kids.length - 1)
     const actions = Array.from(right.querySelectorAll("[data-toolbar-action]"))
     const measure = () => {
       const available = toolbar.clientWidth - rowWidth(actions) - TOOLBAR_GAP
@@ -483,48 +354,4 @@ function useStackedActions(
     return () => ro.disconnect()
   })
   return stacked
-}
-
-/** Small switch: on = rows must match every filter (AND), off = any filter (OR). */
-function MatchAllToggle({
-  label = "Match all filters",
-  checked,
-  onChange,
-  className,
-}: {
-  label?: string
-  checked: boolean
-  onChange: (checked: boolean) => void
-  className?: string
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      data-toolbar-action
-      aria-checked={checked}
-      title={checked ? "Rows must match every filter" : "Rows may match any filter"}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
-        className
-      )}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          "relative inline-flex h-3 w-5 shrink-0 rounded-full transition-colors",
-          checked ? "bg-foreground" : "bg-input"
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 left-0.5 size-2 rounded-full bg-background shadow-xs transition-transform",
-            checked && "translate-x-2"
-          )}
-        />
-      </span>
-      {label}
-    </button>
-  )
 }

@@ -1,23 +1,27 @@
 "use client"
 
 import * as React from "react"
-import { CheckIcon, ChevronDownIcon, LayersIcon, PencilIcon } from "lucide-react"
+import Badge from "@mui/material/Badge"
+import Button from "@mui/material/Button"
+import ButtonGroup from "@mui/material/ButtonGroup"
+import Divider from "@mui/material/Divider"
+import InputAdornment from "@mui/material/InputAdornment"
+import ListItemIcon from "@mui/material/ListItemIcon"
+import ListItemText from "@mui/material/ListItemText"
+import ListSubheader from "@mui/material/ListSubheader"
+import Menu from "@mui/material/Menu"
+import MenuItem from "@mui/material/MenuItem"
+import TextField from "@mui/material/TextField"
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown"
+import CheckIcon from "@mui/icons-material/Check"
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined"
+import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined"
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { sortSummary, viewFilterSummary, type SavedView } from "@/lib/views"
-import { cn } from "@/lib/utils"
 
 /**
- * Saved-views selector. Nothing is selected by default; picking a view applies its filters, sorts,
- * and match mode. "Edited" marks a selected view whose filters/sorts have since been changed.
+ * Saved-views selector: [views icon · name (edited dot)] [rename] [▾] as one ButtonGroup.
+ * Nothing is selected by default; picking a view applies its filters, sort, and match mode.
  */
 export function ViewsMenu({
   views,
@@ -33,8 +37,9 @@ export function ViewsMenu({
   onRename: (id: string, name: string) => void
 }) {
   const selected = views.find((v) => v.id === selectedId) ?? null
+  const [group, setGroup] = React.useState<HTMLDivElement | null>(null)
+  const [open, setOpen] = React.useState(false)
   const [renaming, setRenaming] = React.useState(false)
-  const pillRef = React.useRef<HTMLDivElement>(null)
 
   if (selected && renaming) {
     return (
@@ -48,83 +53,63 @@ export function ViewsMenu({
     )
   }
 
-  // One pill: [menu trigger: icon + name] [rename] [menu trigger: chevron]. The rename button sits
-  // between two triggers of the same menu (a button can't be nested inside the trigger button).
-  const segment =
-    "flex h-full items-center outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+  const pick = (view: SavedView | null) => {
+    setOpen(false)
+    onSelect(view)
+  }
+
   return (
-    <div
-      ref={pillRef}
-      className="flex h-8 max-w-[18rem] min-w-0 items-center overflow-hidden rounded-full border border-border bg-background text-[13px] font-medium transition-colors hover:bg-muted has-aria-expanded:bg-muted dark:border-input"
-    >
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          className={cn(segment, "min-w-0 gap-1.5 rounded-l-full pl-3", selected ? "pr-1" : "pr-1.5")}
+    <>
+      <ButtonGroup ref={setGroup} variant="outlined" aria-label="Saved views">
+        <Button
+          startIcon={<LayersOutlinedIcon />}
+          onClick={() => setOpen(true)}
+          aria-haspopup="menu"
           aria-label={selected ? `View: ${selected.name}${edited ? " (edited)" : ""}` : "Views"}
         >
-          <LayersIcon className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>
+          <Badge color="warning" variant="dot" invisible={!(selected && edited)} title="Edited since saved">
             {selected ? selected.name : "Views"}
-          </span>
-          {selected && edited ? (
-            <span className="size-1.5 shrink-0 rounded-full bg-amber-500" title="Edited since saved" />
-          ) : null}
-        </DropdownMenuTrigger>
+          </Badge>
+        </Button>
         {selected ? (
-          <button
-            type="button"
-            aria-label={`Rename ${selected.name}`}
-            title="Rename view"
-            onClick={() => setRenaming(true)}
-            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-background hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <PencilIcon className="size-3" />
-          </button>
+          <Button aria-label={`Rename ${selected.name}`} title="Rename view" onClick={() => setRenaming(true)}>
+            <EditOutlinedIcon fontSize="inherit" />
+          </Button>
         ) : null}
-        <DropdownMenuTrigger
-          className={cn(segment, "shrink-0 rounded-r-full pr-2.5", selected ? "pl-1" : "pl-0")}
-          aria-label="Choose a view"
-        >
-          <ChevronDownIcon className="size-3.5 text-muted-foreground" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent anchor={pillRef} align="start" className="w-[22rem] max-w-[calc(100vw-2rem)]">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Saved views</DropdownMenuLabel>
-            {views.length === 0 ? (
-              <p className="px-1.5 pt-0.5 pb-2 text-xs text-muted-foreground">
-                No saved views yet. Add filters, then choose <span className="font-medium text-foreground">Save view</span>.
-              </p>
-            ) : (
-              views.map((v) => (
-                <DropdownMenuItem key={v.id} onClick={() => onSelect(v)} className="items-start gap-2 py-1.5">
-                  <CheckIcon className={cn("mt-0.5 size-3.5", v.id === selectedId ? "opacity-100" : "opacity-0")} />
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="text-[13px] font-medium">{v.name}</span>
-                    <span className="line-clamp-2 text-xs text-muted-foreground">{viewFilterSummary(v)}</span>
-                    <span className="text-[11px] text-muted-foreground/80">
-                      {sortSummary(v.sort)}
-                      {v.matchMode === "any" ? " · match any filter" : ""}
-                    </span>
-                  </span>
-                </DropdownMenuItem>
-              ))
-            )}
-          </DropdownMenuGroup>
-          {selected ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onSelect(null)} className="text-[13px] text-muted-foreground">
-                Deselect view (keep current filters)
-              </DropdownMenuItem>
-            </>
-          ) : null}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+        <Button aria-label="Choose a view" aria-haspopup="menu" onClick={() => setOpen(true)}>
+          <ArrowDropDownIcon fontSize="small" />
+        </Button>
+      </ButtonGroup>
+
+      <Menu anchorEl={group} open={open} onClose={() => setOpen(false)}>
+        <ListSubheader>Saved views</ListSubheader>
+        {views.length === 0 ? (
+          <MenuItem disabled>
+            <ListItemText primary="No saved views yet" secondary="Add filters, then choose Save view." />
+          </MenuItem>
+        ) : (
+          views.map((v) => (
+            <MenuItem key={v.id} selected={v.id === selectedId} onClick={() => pick(v)}>
+              <ListItemIcon>{v.id === selectedId ? <CheckIcon /> : null}</ListItemIcon>
+              <ListItemText
+                primary={v.name}
+                secondary={`${viewFilterSummary(v)}\n${sortSummary(v.sort)}${v.matchMode === "any" ? " · match any filter" : ""}`}
+              />
+            </MenuItem>
+          ))
+        )}
+        {selected ? <Divider /> : null}
+        {selected ? (
+          <MenuItem onClick={() => pick(null)}>
+            <ListItemText secondary="Deselect view (keep current filters)" />
+          </MenuItem>
+        ) : null}
+      </Menu>
+    </>
   )
 }
 
-/** Inline name editor in the selector's place: Enter or blur saves, Esc cancels (empty = no change). */
+/** Inline name editor: Enter or blur saves, Esc cancels (an empty name keeps the old one). */
 function RenameField({ initial, onDone }: { initial: string; onDone: (name: string | null) => void }) {
   const [name, setName] = React.useState(initial)
   const done = React.useRef(false)
@@ -134,27 +119,31 @@ function RenameField({ initial, onDone }: { initial: string; onDone: (name: stri
     onDone(value?.trim() || null)
   }
   return (
-    <div className="flex h-8 w-[14rem] items-center gap-1.5 rounded-full border border-ring bg-background pr-1 pl-3 ring-3 ring-ring/25">
-      <LayersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-      <input
-        autoFocus
-        aria-label="View name"
-        value={name}
-        maxLength={60}
-        onFocus={(e) => e.currentTarget.select()}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={() => finish(name)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault()
-            finish(name)
-          } else if (e.key === "Escape") {
-            e.preventDefault()
-            finish(null)
-          }
-        }}
-        className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-medium outline-none"
-      />
-    </div>
+    <TextField
+      autoFocus
+      value={name}
+      onChange={(e) => setName(e.target.value)}
+      onFocus={(e) => e.currentTarget.select()}
+      onBlur={() => finish(name)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault()
+          finish(name)
+        } else if (e.key === "Escape") {
+          e.preventDefault()
+          finish(null)
+        }
+      }}
+      slotProps={{
+        htmlInput: { "aria-label": "View name", maxLength: 60 },
+        input: {
+          startAdornment: (
+            <InputAdornment position="start">
+              <LayersOutlinedIcon />
+            </InputAdornment>
+          ),
+        },
+      }}
+    />
   )
 }

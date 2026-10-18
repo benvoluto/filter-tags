@@ -1,14 +1,13 @@
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 
-import { TooltipProvider } from "@/components/ui/tooltip"
-import "./globals.css"
+import { ThemeRegistry } from "@/components/theme-registry"
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Flow Runs · Filter prototype",
-  description: "Prototype of search, sort, and filter-chip interactions on a paginated data table.",
+  title: "Flow Runs · Filter prototype (MUI)",
+  description: "Prototype of search, sort, filter chips, and saved views on a paginated table — built with stock MUI + theme.",
 }
 
 export const viewport: Viewport = {
@@ -18,9 +17,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col" suppressHydrationWarning>
-        <TooltipProvider delay={300}>{children}</TooltipProvider>
+    <html lang="en" className={inter.variable}>
+      <body suppressHydrationWarning>
+        <ThemeRegistry>{children}</ThemeRegistry>
       </body>
     </html>
   )

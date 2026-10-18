@@ -1,4 +1,4 @@
-import type { SortRule } from "@/components/runs/column-header"
+import type { SortRule } from "./sort"
 
 import { COLUMN_MAP } from "./data"
 import { filterSummary, type Filter, type MatchMode } from "./filters"

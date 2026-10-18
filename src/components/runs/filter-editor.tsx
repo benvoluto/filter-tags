@@ -1,20 +1,30 @@
 "use client"
 
 import * as React from "react"
-import { ArrowLeftIcon, PlusIcon, SlidersHorizontalIcon, Trash2Icon, XIcon } from "lucide-react"
+import Autocomplete from "@mui/material/Autocomplete"
+import Button from "@mui/material/Button"
+import Checkbox from "@mui/material/Checkbox"
+import Dialog from "@mui/material/Dialog"
+import DialogActions from "@mui/material/DialogActions"
+import DialogContent from "@mui/material/DialogContent"
+import DialogContentText from "@mui/material/DialogContentText"
+import DialogTitle from "@mui/material/DialogTitle"
+import Grid from "@mui/material/Grid"
+import IconButton from "@mui/material/IconButton"
+import ListItemIcon from "@mui/material/ListItemIcon"
+import ListItemText from "@mui/material/ListItemText"
+import MenuItem from "@mui/material/MenuItem"
+import MenuList from "@mui/material/MenuList"
+import Paper from "@mui/material/Paper"
+import Stack from "@mui/material/Stack"
+import TextField from "@mui/material/TextField"
+import Toolbar from "@mui/material/Toolbar"
+import Typography from "@mui/material/Typography"
+import AddIcon from "@mui/icons-material/Add"
+import ArrowBackIcon from "@mui/icons-material/ArrowBack"
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined"
+import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined"
 
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { COLUMN_ICONS } from "@/lib/column-icons"
 import { COLUMNS, COLUMN_MAP, distinctValues, formatCriterion, type ColumnKey } from "@/lib/data"
 import {
@@ -26,9 +36,8 @@ import {
   type Filter,
   type Join,
 } from "@/lib/filters"
-import { cn } from "@/lib/utils"
-import { CriteriaCombobox, ValueField } from "./criteria-combobox"
 import { useFilterProbe } from "./filter-probe"
+import { useRepositionPopover } from "./filter-popover"
 
 export type FilterDraft = Omit<Filter, "id">
 
@@ -41,9 +50,12 @@ type FilterEditorProps = {
   onCancel: () => void
 }
 
-/** One criteria item in the editor. `column` is null until a type is picked. */
+/** One criteria line in the editor. `column` is null until a type is picked. */
 type Row = { key: string; join: Join; column: ColumnKey | null; comparator: Comparator; values: string[] }
 type ReadyRow = Row & { column: ColumnKey }
+
+const NO_ROWS = "No rows match this with the current filters"
+const NO_ROWS_COLUMN = "Every value here would return no rows with the current filters"
 
 let rowSeq = 0
 function newRow(partial: Partial<Row> = {}): Row {
@@ -53,12 +65,10 @@ function newRow(partial: Partial<Row> = {}): Row {
 
 function rowComplete(r: Row): r is ReadyRow {
   if (!r.column) return false
-  const arity = COMPARATOR_MAP[r.comparator].arity
-  if (arity === "none") return true
+  if (COMPARATOR_MAP[r.comparator].arity === "none") return true
   return r.values.filter(Boolean).length > 0
 }
 
-/** Build a filter draft from editor rows (first row = the filter itself, the rest = `extra`). */
 function draftFrom(rows: ReadyRow[]): FilterDraft {
   const [first, ...rest] = rows
   return {
@@ -70,27 +80,13 @@ function draftFrom(rows: ReadyRow[]): FilterDraft {
   }
 }
 
-/**
- * Keyboard helper for cmdk inputs: Space picks the highlighted item when the query is empty or
- * the user has arrowed to an item (otherwise it types a space, so "Run ID" can still be typed).
- */
-function useSpaceToSelect(query: string) {
-  const navigated = React.useRef(false)
-  React.useEffect(() => {
-    navigated.current = false
-  }, [query])
-  return (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") navigated.current = true
-    if (e.key !== " " || (query !== "" && !navigated.current)) return
-    const item = highlightedItem(e.currentTarget)
-    if (!item) return
-    e.preventDefault()
-    item.click()
-  }
-}
-
-function highlightedItem(input: HTMLElement) {
-  return input.closest("[cmdk-root]")?.querySelector<HTMLElement>('[cmdk-item][data-selected="true"]') ?? null
+/** Short text for a criteria line, e.g. "Status equals Failed, Running" (empty if no type yet). */
+function rowText(row: Row): string {
+  if (!row.column) return ""
+  const col = COLUMN_MAP[row.column]
+  const cmp = COMPARATOR_MAP[row.comparator]
+  const vals = row.values.filter(Boolean).map((v) => formatCriterion(col, v))
+  return [col.label, cmp.label, vals.join(cmp.arity === "two" ? " and " : ", ")].filter(Boolean).join(" ")
 }
 
 export function FilterEditor(props: FilterEditorProps) {
@@ -105,19 +101,19 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
     initial ? conditionsOf(initial).map((c) => newRow(c)) : [newRow({ column: fixedColumn ?? null })]
   )
   const [advanced, setAdvanced] = React.useState(Boolean(initial?.extra?.length))
-  const [columnQuery, setColumnQuery] = React.useState("")
   const [confirmBasic, setConfirmBasic] = React.useState(false)
   const probe = useFilterProbe()
-  const columnKeyDown = useSpaceToSelect(columnQuery)
+  const reposition = useRepositionPopover()
+  // The panel changes size between steps / modes / row counts: keep it on screen.
+  const firstColumn = rows[0]?.column
+  React.useLayoutEffect(() => reposition(), [reposition, advanced, rows.length, firstColumn])
 
-  const updateRow = (i: number, patch: Partial<Row>) =>
-    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  const updateRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   const changeColumn = (i: number, column: ColumnKey) => updateRow(i, { column, comparator: "is", values: [] })
   const changeComparator = (i: number, comparator: Comparator) =>
     setRows((rs) =>
       rs.map((r, j) => {
         if (j !== i) return r
-        // Keep values only when the shape of the input stays the same.
         const same = COMPARATOR_MAP[comparator].arity === COMPARATOR_MAP[r.comparator].arity
         return { ...r, comparator, values: same ? r.values : [] }
       })
@@ -137,12 +133,7 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
       return candidate.length > 0 && !probe(draftFrom(candidate), initial?.id)
     }
   }
-
-  /**
-   * Zero-row check for a whole column in row i: true when no remaining row has any value in that
-   * column, i.e. every criterion offered for it would return zero rows. (Equivalent to probing
-   * "<column> is not empty", which avoids trying each value.)
-   */
+  /** Zero-row check for a whole column in row i ("<column> is not empty" leaves nothing). */
   const columnReturnsNoRowsFor = (i: number) => {
     if (!probe) return undefined
     return (column: ColumnKey) => {
@@ -160,231 +151,373 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
   }
   const toggleAdvanced = () => {
     if (!advanced) setAdvanced(true)
-    // Leaving advanced with several lines would drop all but the first: confirm first.
     else if (rows.length > 1) setConfirmBasic(true)
     else toBasic()
   }
 
   const advancedButton = (
-    <Button
-      type="button"
-      variant={advanced ? "secondary" : "outline"}
-      size="sm"
-      onClick={toggleAdvanced}
-    >
-      <SlidersHorizontalIcon />
+    <Button variant={advanced ? "contained" : "outlined"} color={advanced ? "secondary" : "primary"} startIcon={<TuneOutlinedIcon />} onClick={toggleAdvanced}>
       {advanced ? "Basic filter" : "Advanced filter"}
     </Button>
   )
-
-  const footer = (
-    <div className="flex flex-wrap items-center gap-2 pt-1">
+  const actions = (
+    <Toolbar variant="panelBar">
       {advancedButton}
-      <div className="ml-auto flex gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" size="sm" disabled={!canSubmit}>
-          {initial ? "Save filter" : "Add filter"}
-        </Button>
-      </div>
-    </div>
+      <Button variant="text" onClick={onCancel}>
+        Cancel
+      </Button>
+      <Button variant="contained" type="submit" disabled={!canSubmit}>
+        {initial ? "Save filter" : "Add filter"}
+      </Button>
+    </Toolbar>
   )
 
-  // ── Advanced: up to 10 criteria items joined with and/or ─────────────────────────────────────
+  // ── Advanced: up to 10 criteria lines joined with and/or ─────────────────────────────────
   if (advanced) {
     const joins = new Set(rows.slice(1).map((r) => r.join))
     return (
-      <form
-        className="flex w-[44rem] max-w-full flex-col gap-3"
-        onSubmit={(e) => {
+      <Paper
+        variant="panelWide"
+        component="form"
+        onSubmit={(e: React.FormEvent) => {
           e.preventDefault()
           submit(rows)
         }}
       >
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 text-[13px] font-semibold">
-            <SlidersHorizontalIcon className="size-3.5 text-muted-foreground" aria-hidden />
-            Advanced filter
-          </span>
-          <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-            {rows.length} of {MAX_CONDITIONS} conditions
-          </span>
-        </div>
+        <Stack spacing={1.5}>
+          <Toolbar variant="panelBar">
+            <Typography variant="subtitle2">Advanced filter</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {rows.length} of {MAX_CONDITIONS} conditions
+            </Typography>
+          </Toolbar>
 
-        <div className="-mx-1 flex max-h-[min(60vh,28rem)] flex-col gap-2 overflow-y-auto px-1 py-0.5">
-          {rows.map((row, i) => (
-            <ConditionRow
-              key={row.key}
-              index={i}
-              row={row}
-              onJoin={(join) => updateRow(i, { join })}
-              onColumn={(c) => changeColumn(i, c)}
-              onComparator={(c) => changeComparator(i, c)}
-              onValues={(values) => updateRow(i, { values })}
-              onRemove={rows.length > 1 ? () => setRows((rs) => rs.filter((_, j) => j !== i)) : undefined}
-              returnsNoRows={returnsNoRowsFor(i)}
-              columnReturnsNoRows={columnReturnsNoRowsFor(i)}
-              autoFocus={i === rows.length - 1 && i > 0}
-            />
-          ))}
-        </div>
+          <Stack spacing={1}>
+            {rows.map((row, i) => (
+              <ConditionRow
+                key={row.key}
+                index={i}
+                row={row}
+                onJoin={(join) => updateRow(i, { join })}
+                onColumn={(c) => changeColumn(i, c)}
+                onComparator={(c) => changeComparator(i, c)}
+                onValues={(values) => updateRow(i, { values })}
+                onRemove={rows.length > 1 ? () => setRows((rs) => rs.filter((_, j) => j !== i)) : undefined}
+                returnsNoRows={returnsNoRowsFor(i)}
+                columnReturnsNoRows={columnReturnsNoRowsFor(i)}
+              />
+            ))}
+          </Stack>
 
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={rows.length >= MAX_CONDITIONS}
-            onClick={() => setRows((rs) => [...rs, newRow({ join: rs[rs.length - 1]?.join ?? "and" })])}
-          >
-            <PlusIcon />
-            Add condition
-          </Button>
-          {joins.size > 1 ? (
-            <p className="text-[11px] text-muted-foreground">AND conditions are evaluated before OR.</p>
-          ) : null}
-        </div>
+          <Toolbar variant="panelBar">
+            <Button
+              variant="text"
+              startIcon={<AddIcon />}
+              disabled={rows.length >= MAX_CONDITIONS}
+              onClick={() => setRows((rs) => [...rs, newRow({ join: rs[rs.length - 1]?.join ?? "and" })])}
+            >
+              Add condition
+            </Button>
+            {joins.size > 1 ? (
+              <Typography variant="caption" color="text.secondary">
+                AND conditions are evaluated before OR.
+              </Typography>
+            ) : null}
+          </Toolbar>
 
-        {footer}
+          {actions}
+        </Stack>
 
-        <Dialog open={confirmBasic} onOpenChange={setConfirmBasic}>
-          <DialogContent role="alertdialog" showCloseButton={false} className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Switch to a basic filter?</DialogTitle>
-              <DialogDescription>
-                A basic filter has a single type–operator–criteria line. Only the first line
-                {rowText(rows[0]) ? <> (<span className="font-medium text-foreground">{rowText(rows[0])}</span>)</> : null} will
-                be kept; the other {rows.length - 1} {rows.length - 1 === 1 ? "line" : "lines"} will be removed.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button type="button" variant="outline" autoFocus onClick={() => setConfirmBasic(false)}>
-                Keep advanced
-              </Button>
-              <Button type="button" variant="destructive" onClick={toBasic}>
-                Keep first line only
-              </Button>
-            </DialogFooter>
+        <Dialog open={confirmBasic} onClose={() => setConfirmBasic(false)} role="alertdialog" aria-labelledby="confirm-basic-title">
+          <DialogTitle id="confirm-basic-title">Switch to a basic filter?</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              A basic filter has a single type–operator–criteria line. Only the first line
+              {rowText(rows[0]) ? ` (${rowText(rows[0])})` : ""} will be kept; the other {rows.length - 1}{" "}
+              {rows.length - 1 === 1 ? "line" : "lines"} will be removed.
+            </DialogContentText>
           </DialogContent>
+          <DialogActions>
+            <Button variant="outlined" autoFocus onClick={() => setConfirmBasic(false)}>
+              Keep advanced
+            </Button>
+            <Button variant="contained" color="error" onClick={toBasic}>
+              Keep first line only
+            </Button>
+          </DialogActions>
         </Dialog>
-      </form>
+      </Paper>
     )
   }
 
-  // ── Basic, step 1: pick the filter type (column) ──────────────────────────────────────────────
+  // ── Basic, step 1: pick the column (MenuList: arrows, type-ahead, Space/Enter to choose) ──
   const row = rows[0]
   if (!row.column) {
     const columnIsEmpty = columnReturnsNoRowsFor(0)
     return (
-      <div className="flex w-[22rem] max-w-full flex-col gap-2">
-        <Command className="rounded-none! border-0 border-b border-border bg-background p-0">
-          <CommandInput
-            placeholder="Select or type a column…"
-            autoFocus
-            value={columnQuery}
-            onValueChange={setColumnQuery}
-            onKeyDown={columnKeyDown}
-          />
-          <CommandList className="max-h-64">
-            <CommandEmpty>No matching columns.</CommandEmpty>
-            <CommandGroup>
-              {COLUMNS.map((c) => {
-                const empty = columnIsEmpty?.(c.key) ?? false
-                return (
-                  <CommandItem
-                    key={c.key}
-                    value={c.label}
-                    onSelect={() => changeColumn(0, c.key)}
-                    title={empty ? NO_ROWS_COLUMN_TITLE : undefined}
-                    className={cn(
-                      empty &&
-                        "text-amber-600/70 data-selected:bg-amber-50 data-selected:text-amber-700/80 dark:text-amber-300/60 dark:data-selected:bg-amber-400/10 dark:data-selected:text-amber-300/80"
-                    )}
-                  >
-                    <span className="flex-1">{c.label}</span>
-                    {empty ? <span className="sr-only"> (no matching rows)</span> : null}
-                  </CommandItem>
-                )
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          {advancedButton}
-          <Button variant="ghost" size="sm" className="ml-auto" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
-      </div>
+      <Paper variant="panel">
+        <Stack spacing={1}>
+          <Typography variant="subtitle2">Filter by</Typography>
+          <MenuList autoFocusItem aria-label="Columns">
+            {COLUMNS.map((c) => {
+              const empty = columnIsEmpty?.(c.key) ?? false
+              return (
+                <MenuItem key={c.key} onClick={() => changeColumn(0, c.key)} title={empty ? NO_ROWS_COLUMN : undefined}>
+                  <ListItemText primary={c.label} slotProps={{ primary: { color: empty ? "warning" : undefined } }} />
+                </MenuItem>
+              )
+            })}
+          </MenuList>
+          <Toolbar variant="panelBar">
+            {advancedButton}
+            <Button variant="text" onClick={onCancel}>
+              Cancel
+            </Button>
+          </Toolbar>
+        </Stack>
+      </Paper>
     )
   }
 
-  // ── Basic, step 2: operator + criteria list ───────────────────────────────────────────────────
+  // ── Basic, step 2: operator + criteria ──────────────────────────────────────────────────
   const column = row.column
-  const col = COLUMN_MAP[column]
   const Icon = COLUMN_ICONS[column]
+  const arity = COMPARATOR_MAP[row.comparator].arity
   return (
-    <form
-      className="flex w-[22rem] max-w-full flex-col gap-3"
-      onSubmit={(e) => {
+    <Paper
+      variant="panel"
+      component="form"
+      onSubmit={(e: React.FormEvent) => {
         e.preventDefault()
         submit([row])
       }}
+      // Enter anywhere in the panel adds the filter (buttons keep their own Enter behaviour).
+      onKeyDown={(e: React.KeyboardEvent) => {
+        const target = e.target as HTMLElement
+        if (e.key === "Enter" && arity === "multi" && !target.closest("button")) {
+          e.preventDefault()
+          submit([row])
+        }
+      }}
     >
-      <div className="flex items-center gap-2">
-        {!fixedColumn && !initial ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Choose a different column"
-            onClick={() => updateRow(0, { column: null, comparator: "is", values: [] })}
-          >
-            <ArrowLeftIcon />
-          </Button>
-        ) : null}
-        <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold">
-          <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="truncate">{col.label} filter</span>
-        </span>
-        <ComparatorSelect
-          column={column}
-          value={row.comparator}
-          onChange={(c) => changeComparator(0, c)}
-          className="ml-auto"
-        />
-      </div>
+      <Stack spacing={1.5}>
+        <Toolbar variant="panelBar">
+          <Stack direction="row" spacing={0.75}>
+            {!fixedColumn && !initial ? (
+              <IconButton aria-label="Choose a different column" onClick={() => updateRow(0, { column: null, comparator: "is", values: [] })}>
+                <ArrowBackIcon />
+              </IconButton>
+            ) : null}
+            <Icon fontSize="small" color="action" />
+            <Typography variant="subtitle2" noWrap>
+              {COLUMN_MAP[column].label} filter
+            </Typography>
+          </Stack>
+          <ComparatorSelect column={column} value={row.comparator} onChange={(c) => changeComparator(0, c)} />
+        </Toolbar>
 
-      <CriteriaInput
-        column={column}
-        comparator={row.comparator}
-        values={row.values}
-        onChange={(values) => updateRow(0, { values })}
-        onCommit={(values) => {
-          const next = { ...row, values }
-          if (rowComplete(next)) submit([next])
-          else updateRow(0, { values })
-        }}
-        returnsNoRows={returnsNoRowsFor(0)}
-        autoFocus
-      />
+        {arity === "multi" ? (
+          <ValueList
+            column={column}
+            values={row.values}
+            onChange={(values) => updateRow(0, { values })}
+            onCommit={() => submit([row])}
+            returnsNoRows={returnsNoRowsFor(0)}
+          />
+        ) : (
+          <CriteriaInput column={column} comparator={row.comparator} values={row.values} onChange={(values) => updateRow(0, { values })} autoFocus />
+        )}
 
-      {footer}
-    </form>
+        {actions}
+      </Stack>
+    </Paper>
   )
 }
 
-/** Short text for a criteria line, e.g. "Status equals Failed, Running" (empty if no type yet). */
-function rowText(row: Row): string {
-  if (!row.column) return ""
-  const col = COLUMN_MAP[row.column]
-  const cmp = COMPARATOR_MAP[row.comparator]
-  const vals = row.values.filter(Boolean).map((v) => formatCriterion(col, v))
-  return [col.label, cmp.label, vals.join(cmp.arity === "two" ? " and " : ", ")].filter(Boolean).join(" ")
+/** Basic multi-select: a MenuList of checkable values. Space toggles, Enter adds the filter. */
+function ValueList({
+  column,
+  values,
+  onChange,
+  onCommit,
+  returnsNoRows,
+}: {
+  column: ColumnKey
+  values: string[]
+  onChange: (values: string[]) => void
+  onCommit: () => void
+  returnsNoRows?: (value: string) => boolean
+}) {
+  const col = COLUMN_MAP[column]
+  const options = React.useMemo(() => distinctValues(column), [column])
+  const lower = values.map((v) => v.toLowerCase())
+  const toggle = (v: string) => {
+    const idx = lower.indexOf(v.toLowerCase())
+    onChange(idx >= 0 ? values.filter((_, i) => i !== idx) : [...values, v])
+  }
+  return (
+    <MenuList
+      autoFocusItem
+      aria-label={`${col.label} values`}
+      // Enter on a value submits the whole filter instead of toggling it.
+      onKeyDownCapture={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault()
+          e.stopPropagation()
+          onCommit()
+        }
+      }}
+    >
+      {options.map((o) => {
+        const checked = lower.includes(o.toLowerCase())
+        const empty = returnsNoRows?.(o) ?? false
+        return (
+          <MenuItem key={o} role="menuitemcheckbox" aria-checked={checked} onClick={() => toggle(o)} title={empty ? NO_ROWS : undefined}>
+            <ListItemIcon>
+              <Checkbox checked={checked} tabIndex={-1} />
+            </ListItemIcon>
+            <ListItemText
+              primary={formatCriterion(col, o)}
+              secondary={empty ? "No matching rows" : undefined}
+              slotProps={{ primary: { color: empty ? "warning" : undefined }, secondary: { color: "warning" } }}
+            />
+          </MenuItem>
+        )
+      })}
+    </MenuList>
+  )
 }
 
-/** One advanced criteria item: [Where | and/or] [type] [operator] [criteria] [delete]. */
+/** Criteria entry for a comparator: chip combobox (multi), one or two value fields, or nothing. */
+function CriteriaInput({
+  column,
+  comparator,
+  values,
+  onChange,
+  returnsNoRows,
+  autoFocus,
+}: {
+  column: ColumnKey
+  comparator: Comparator
+  values: string[]
+  onChange: (values: string[]) => void
+  returnsNoRows?: (value: string) => boolean
+  autoFocus?: boolean
+}) {
+  const col = COLUMN_MAP[column]
+  const arity = COMPARATOR_MAP[comparator].arity
+  if (arity === "none") {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        No value needed
+      </Typography>
+    )
+  }
+  if (arity === "multi") {
+    return <ValuesCombobox column={column} values={values} onChange={onChange} returnsNoRows={returnsNoRows} />
+  }
+  const unit = col.type === "duration" ? " (sec)" : col.type === "percent" ? " (%)" : col.type === "date" ? " (YYYY-MM-DD)" : ""
+  const field = (i: number, label: string) => (
+    <ValueField
+      column={column}
+      label={`${label}${unit}`}
+      value={values[i] ?? ""}
+      autoFocus={autoFocus && i === 0}
+      onChange={(v) => {
+        const next = [...values]
+        next[i] = v
+        onChange(next)
+      }}
+    />
+  )
+  if (arity === "one") return field(0, "Value")
+  return (
+    <Stack direction="row" spacing={1}>
+      {field(0, "From")}
+      {field(1, "To")}
+    </Stack>
+  )
+}
+
+/** Multi-select Autocomplete: picks accumulate as chips; typed values not in the list are allowed. */
+function ValuesCombobox({
+  column,
+  values,
+  onChange,
+  returnsNoRows,
+}: {
+  column: ColumnKey
+  values: string[]
+  onChange: (values: string[]) => void
+  returnsNoRows?: (value: string) => boolean
+}) {
+  const col = COLUMN_MAP[column]
+  const options = React.useMemo(() => distinctValues(column), [column])
+  return (
+    <Autocomplete<string, true, false, true>
+      multiple
+      freeSolo
+      fullWidth
+      disableCloseOnSelect
+      limitTags={2}
+      options={options}
+      value={values}
+      onChange={(_, next) => onChange(next)}
+      getOptionLabel={(v) => formatCriterion(col, v)}
+      // Autocomplete options are plain <li> elements carrying MUI's option props (the documented pattern).
+      renderOption={({ key, ...props }, option, { selected }) => {
+        const empty = returnsNoRows?.(option) ?? false
+        return (
+          <li key={key} {...props} title={empty ? NO_ROWS : undefined}>
+            <Checkbox checked={selected} tabIndex={-1} />
+            <ListItemText primary={formatCriterion(col, option)} slotProps={{ primary: { color: empty ? "warning" : undefined } }} />
+          </li>
+        )
+      }}
+      renderInput={(params) => <TextField {...params} placeholder={values.length ? "" : `Select ${col.label.toLowerCase()}…`} />}
+    />
+  )
+}
+
+/** Single value for >, <, between: type any value or pick one of the column's existing values. */
+function ValueField({
+  column,
+  label,
+  value,
+  onChange,
+  autoFocus,
+}: {
+  column: ColumnKey
+  label: string
+  value: string
+  onChange: (value: string) => void
+  autoFocus?: boolean
+}) {
+  const col = COLUMN_MAP[column]
+  const options = React.useMemo(() => distinctValues(column), [column])
+  return (
+    <Autocomplete<string, false, false, true>
+      freeSolo
+      fullWidth
+      openOnFocus
+      options={options}
+      inputValue={value}
+      onInputChange={(_, v) => onChange(v)}
+      filterOptions={(opts, { inputValue }) => {
+        const q = inputValue.trim().toLowerCase()
+        return q ? opts.filter((o) => o.toLowerCase().includes(q) || formatCriterion(col, o).toLowerCase().includes(q)) : opts
+      }}
+      renderOption={({ key, ...props }, option) => (
+        <li key={key} {...props}>
+          <ListItemText primary={formatCriterion(col, option)} secondary={formatCriterion(col, option) !== option ? option : undefined} />
+        </li>
+      )}
+      renderInput={(params) => <TextField {...params} label={label} autoFocus={autoFocus} />}
+    />
+  )
+}
+
+/** One advanced criteria line: [Where | and/or] [type] [operator] [criteria] [delete]. */
 function ConditionRow({
   index,
   row,
@@ -395,7 +528,6 @@ function ConditionRow({
   onRemove,
   returnsNoRows,
   columnReturnsNoRows,
-  autoFocus,
 }: {
   index: number
   row: Row
@@ -406,144 +538,100 @@ function ConditionRow({
   onRemove?: () => void
   returnsNoRows?: (value: string) => boolean
   columnReturnsNoRows?: (column: ColumnKey) => boolean
-  autoFocus?: boolean
 }) {
   return (
-    <div role="group" aria-label={`Condition ${index + 1}`} className="flex flex-wrap items-center gap-2">
-      <div className="w-16 shrink-0">
+    <Grid container columns={24} spacing={1} role="group" aria-label={`Condition ${index + 1}`}>
+      <Grid size={{ xs: 6, sm: 3 }}>
         {index === 0 ? (
-          <span className="pl-2 text-xs font-medium text-muted-foreground">Where</span>
+          <Typography variant="caption" color="text.secondary">
+            Where
+          </Typography>
         ) : (
-          <JoinSelect value={row.join} onChange={onJoin} />
+          <TextField select fullWidth value={row.join} onChange={(e) => onJoin(e.target.value as Join)} slotProps={{ htmlInput: { "aria-label": "And / or" } }}>
+            <MenuItem value="and">and</MenuItem>
+            <MenuItem value="or">or</MenuItem>
+          </TextField>
         )}
-      </div>
-      <ColumnSelect
-        value={row.column}
-        onChange={onColumn}
-        isEmpty={columnReturnsNoRows}
-        autoFocus={autoFocus}
-        className="w-36 shrink-0"
-      />
-      {row.column ? (
-        <ComparatorSelect
-          column={row.column}
-          value={row.comparator}
-          onChange={onComparator}
-          className="w-36 min-w-0 shrink-0"
-        />
-      ) : (
-        <button
-          type="button"
-          disabled
-          aria-label="Operator (pick a type first)"
-          className="flex h-7 w-36 shrink-0 items-center rounded-[min(var(--radius-md),10px)] border border-input px-2.5 text-sm text-muted-foreground opacity-50"
+      </Grid>
+      <Grid size={{ xs: 18, sm: 5 }}>
+        <TextField
+          select
+          fullWidth
+          value={row.column ?? ""}
+          onChange={(e) => onColumn(e.target.value as ColumnKey)}
+          slotProps={{
+            htmlInput: { "aria-label": "Filter type" },
+            select: { displayEmpty: true, renderValue: (v) => (v ? COLUMN_MAP[v as ColumnKey].label : "Type…") },
+          }}
         >
-          Operator
-        </button>
-      )}
-      <div className="min-w-48 flex-1">
+          {COLUMNS.map((c) => {
+            const Icon = COLUMN_ICONS[c.key]
+            const empty = columnReturnsNoRows?.(c.key) ?? false
+            return (
+              <MenuItem key={c.key} value={c.key} title={empty ? NO_ROWS_COLUMN : undefined}>
+                <ListItemIcon>
+                  <Icon color={empty ? "warning" : "inherit"} />
+                </ListItemIcon>
+                <ListItemText primary={c.label} slotProps={{ primary: { color: empty ? "warning" : undefined } }} />
+              </MenuItem>
+            )
+          })}
+        </TextField>
+      </Grid>
+      <Grid size={{ xs: 10, sm: 5 }}>
         {row.column ? (
-          <CriteriaInput
-            column={row.column}
-            comparator={row.comparator}
-            values={row.values}
-            onChange={onValues}
-            returnsNoRows={returnsNoRows}
-            variant="combobox"
-          />
+          <ComparatorSelect column={row.column} value={row.comparator} onChange={onComparator} fullWidth />
         ) : (
-          <div className="flex h-8 items-center rounded-lg border border-dashed border-input px-2.5 text-[13px] text-muted-foreground">
-            Pick a type first
-          </div>
+          <TextField select fullWidth disabled value="" slotProps={{ select: { displayEmpty: true, renderValue: () => "Operator" } }}>
+            <MenuItem value="">Operator</MenuItem>
+          </TextField>
         )}
-      </div>
-      {onRemove ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Remove condition ${index + 1}`}
-          onClick={onRemove}
-          className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2Icon />
-        </Button>
-      ) : (
-        <span className="w-7 shrink-0" aria-hidden />
-      )}
-    </div>
+      </Grid>
+      <Grid size={{ xs: 12, sm: 10 }}>
+        {row.column ? (
+          <CriteriaInput column={row.column} comparator={row.comparator} values={row.values} onChange={onValues} returnsNoRows={returnsNoRows} />
+        ) : (
+          <Typography variant="caption" color="text.secondary">
+            Pick a type first
+          </Typography>
+        )}
+      </Grid>
+      <Grid size={{ xs: 2, sm: 1 }}>
+        {onRemove ? (
+          <IconButton aria-label={`Remove condition ${index + 1}`} onClick={onRemove}>
+            <DeleteOutlinedIcon />
+          </IconButton>
+        ) : null}
+      </Grid>
+    </Grid>
   )
 }
 
-const JOIN_ITEMS = [
-  { value: "and", label: "and" },
-  { value: "or", label: "or" },
-]
-
-function JoinSelect({ value, onChange }: { value: Join; onChange: (join: Join) => void }) {
-  return (
-    <Select items={JOIN_ITEMS} value={value} onValueChange={(v) => v && onChange(v as Join)}>
-      <SelectTrigger size="sm" className="w-full" aria-label="And / or">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false} align="start">
-        {JOIN_ITEMS.map((i) => (
-          <SelectItem key={i.value} value={i.value}>
-            {i.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
-
-const NO_ROWS_COLUMN_TITLE = "Every value here would return no rows with the current filters"
-
-const COLUMN_ITEMS = COLUMNS.map((c) => ({ value: c.key, label: c.label }))
-
-function ColumnSelect({
+function ComparatorSelect({
+  column,
   value,
   onChange,
-  isEmpty,
-  autoFocus,
-  className,
+  fullWidth,
 }: {
-  value: ColumnKey | null
-  onChange: (column: ColumnKey) => void
-  /** Flags columns where every criterion would return zero rows (shown in pale amber). */
-  isEmpty?: (column: ColumnKey) => boolean
-  autoFocus?: boolean
-  className?: string
+  column: ColumnKey
+  value: Comparator
+  onChange: (v: Comparator) => void
+  fullWidth?: boolean
 }) {
-  const Icon = value ? COLUMN_ICONS[value] : null
   return (
-    <Select items={COLUMN_ITEMS} value={value} onValueChange={(v) => v && onChange(v as ColumnKey)}>
-      <SelectTrigger size="sm" className={cn("min-w-0", className)} aria-label="Filter type" autoFocus={autoFocus}>
-        {Icon ? <Icon className="size-3.5 text-muted-foreground" /> : null}
-        <SelectValue placeholder="Type…" className="flex-1 text-left" />
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false} align="start">
-        {COLUMNS.map((c) => {
-          const ItemIcon = COLUMN_ICONS[c.key]
-          const empty = isEmpty?.(c.key) ?? false
-          return (
-            <SelectItem
-              key={c.key}
-              value={c.key}
-              title={empty ? NO_ROWS_COLUMN_TITLE : undefined}
-              className={cn(
-                empty &&
-                  "text-amber-600/70 focus:bg-amber-50 focus:text-amber-700/80 not-data-[variant=destructive]:focus:**:text-amber-700/80 dark:text-amber-300/60 dark:focus:bg-amber-400/10"
-              )}
-            >
-              <ItemIcon className={empty ? "text-current" : "text-muted-foreground"} />
-              {c.label}
-              {empty ? <span className="sr-only"> (no matching rows)</span> : null}
-            </SelectItem>
-          )
-        })}
-      </SelectContent>
-    </Select>
+    <TextField
+      select
+      fullWidth={fullWidth}
+      value={value}
+      onChange={(e) => onChange(e.target.value as Comparator)}
+      slotProps={{ htmlInput: { "aria-label": "Operator" } }}
+    >
+      {comparatorsFor(COLUMN_MAP[column]).map((c) => (
+        <MenuItem key={c.value} value={c.value}>
+          {c.label}
+        </MenuItem>
+      ))}
+    </TextField>
   )
 }
 
@@ -558,263 +646,27 @@ function SearchFilterEditor({
 }) {
   const [text, setText] = React.useState(initial.values[0] ?? "")
   return (
-    <form
-      className="flex w-[22rem] max-w-full flex-col gap-3"
-      onSubmit={(e) => {
+    <Paper
+      variant="panel"
+      component="form"
+      onSubmit={(e: React.FormEvent) => {
         e.preventDefault()
         if (text.trim()) onSubmit({ ...initial, values: [text.trim()] })
       }}
     >
-      <span className="text-sm font-semibold">Search text</span>
-      <Input value={text} onChange={(e) => setText(e.target.value)} autoFocus />
-      <p className="text-xs text-muted-foreground">Matches rows containing every word, in any column.</p>
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" size="sm" disabled={!text.trim()}>
-          Save filter
-        </Button>
-      </div>
-    </form>
-  )
-}
-
-function ComparatorSelect({
-  column,
-  value,
-  onChange,
-  className,
-}: {
-  column: ColumnKey
-  value: Comparator
-  onChange: (v: Comparator) => void
-  className?: string
-}) {
-  const items = comparatorsFor(COLUMN_MAP[column]).map((c) => ({ value: c.value as string, label: c.label }))
-  return (
-    <Select items={items} value={value} onValueChange={(v) => v && onChange(v as Comparator)}>
-      <SelectTrigger size="sm" className={cn("min-w-32", className)} aria-label="Operator">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false} align="end">
-        {items.map((i) => (
-          <SelectItem key={i.value} value={i.value}>
-            {i.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-}
-
-/** Renders the right criteria entry for a comparator: multi-value combobox, one or two inputs, or nothing. */
-function CriteriaInput({
-  column,
-  comparator,
-  values,
-  onChange,
-  onCommit,
-  returnsNoRows,
-  autoFocus,
-  compact,
-  variant = "list",
-}: {
-  column: ColumnKey
-  comparator: Comparator
-  values: string[]
-  onChange: (v: string[]) => void
-  /** Enter in the criteria list: submit the filter with these values. */
-  onCommit?: (v: string[]) => void
-  /** "list": scrolling multi-select (basic). "combobox": single-line chip combobox (advanced). */
-  variant?: "list" | "combobox"
-  /** Flags criteria that would return zero rows (shown in pale amber). */
-  returnsNoRows?: (value: string) => boolean
-  autoFocus?: boolean
-  compact?: boolean
-}) {
-  const arity = COMPARATOR_MAP[comparator].arity
-  if (arity === "none") {
-    return variant === "combobox" ? (
-      <div className="flex h-8 items-center px-1 text-xs text-muted-foreground">No value needed</div>
-    ) : (
-      <p className="px-1 text-xs text-muted-foreground">No value needed.</p>
-    )
-  }
-  if (arity === "multi" && variant === "combobox") {
-    return (
-      <CriteriaCombobox
-        column={column}
-        values={values}
-        onChange={onChange}
-        returnsNoRows={returnsNoRows}
-        autoFocus={autoFocus}
-      />
-    )
-  }
-  if (arity === "multi") {
-    return (
-      <ValuePicker
-        column={column}
-        values={values}
-        onChange={onChange}
-        onCommit={onCommit ?? onChange}
-        returnsNoRows={returnsNoRows}
-        autoFocus={autoFocus}
-        compact={compact}
-        allowCustom
-      />
-    )
-  }
-  // Single-value operators (>, <, between): free entry plus a dropdown of the column's existing values.
-  const field = (i: number, placeholder?: string) => (
-    <ValueField
-      column={column}
-      value={values[i] ?? ""}
-      placeholder={placeholder}
-      autoFocus={autoFocus && i === 0}
-      onChange={(v) => {
-        const next = [...values]
-        next[i] = v
-        onChange(next)
-      }}
-      className="flex-1"
-    />
-  )
-  if (arity === "one") return field(0)
-  return (
-    <div className="flex items-center gap-2">
-      {field(0, "From")}
-      <span className="text-xs text-muted-foreground">and</span>
-      {field(1, "To")}
-    </div>
-  )
-}
-
-/** Multi-select combobox: picked values accumulate as removable criteria chips above the input. */
-function ValuePicker({
-  column,
-  values,
-  onChange,
-  onCommit,
-  returnsNoRows,
-  autoFocus,
-  compact,
-  allowCustom,
-}: {
-  column: ColumnKey
-  values: string[]
-  onChange: (v: string[]) => void
-  onCommit: (v: string[]) => void
-  returnsNoRows?: (value: string) => boolean
-  autoFocus?: boolean
-  compact?: boolean
-  allowCustom?: boolean
-}) {
-  const col = COLUMN_MAP[column]
-  const [query, setQuery] = React.useState("")
-  const options = React.useMemo(() => distinctValues(column), [column])
-  const noRows = React.useMemo(
-    () => new Set(returnsNoRows ? options.filter((o) => returnsNoRows(o)) : []),
-    [options, returnsNoRows]
-  )
-  const lower = values.map((v) => v.toLowerCase())
-  const typed = query.trim()
-  const showCustom =
-    allowCustom && typed !== "" && !options.some((o) => o.toLowerCase() === typed.toLowerCase()) && !lower.includes(typed.toLowerCase())
-
-  const spaceToSelect = useSpaceToSelect(query)
-
-  const toggle = (v: string) => {
-    const idx = lower.indexOf(v.toLowerCase())
-    onChange(idx >= 0 ? values.filter((_, i) => i !== idx) : [...values, v])
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      {values.length ? (
-        <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto px-0.5 py-0.5">
-          {values.map((v) => (
-            <span
-              key={v}
-              className="inline-flex h-6 max-w-full items-center gap-0.5 rounded-full border border-border bg-muted pr-0.5 pl-2.5 text-xs font-medium text-foreground"
-            >
-              <span className="truncate">{formatCriterion(col, v)}</span>
-              <button
-                type="button"
-                className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
-                aria-label={`Remove ${formatCriterion(col, v)}`}
-                onClick={() => toggle(v)}
-              >
-                <XIcon className="size-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
-      <Command className="rounded-none! border-0 border-b border-border bg-background p-0" loop>
-        <CommandInput
-          placeholder={values.length ? "Add another value…" : `Select or type ${col.label.toLowerCase()}…`}
-          value={query}
-          onValueChange={setQuery}
-          autoFocus={autoFocus}
-          onKeyDown={(e) => {
-            // Backspace on an empty input removes the last chip, like a token field.
-            if (e.key === "Backspace" && query === "" && values.length) onChange(values.slice(0, -1))
-            // Enter submits the whole filter (preventDefault stops cmdk toggling the item). If the
-            // user typed a query, the highlighted match is included rather than silently dropped.
-            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-              e.preventDefault()
-              const raw = typed ? highlightedItem(e.currentTarget)?.dataset.raw : undefined
-              onCommit(raw && !lower.includes(raw.toLowerCase()) ? [...values, raw] : values)
-              return
-            }
-            spaceToSelect(e)
-          }}
-        />
-        <CommandList className={compact ? "max-h-32" : "max-h-44"}>
-          <CommandEmpty>No matching values.</CommandEmpty>
-          <CommandGroup>
-            {showCustom ? (
-              <CommandItem
-                value={`__custom__${typed}`}
-                data-raw={typed}
-                forceMount
-                onSelect={() => {
-                  toggle(typed)
-                  setQuery("")
-                }}
-              >
-                <PlusIcon />
-                Use “{typed}”
-              </CommandItem>
-            ) : null}
-            {options.map((o) => {
-              const empty = noRows.has(o)
-              return (
-                <CommandItem
-                  key={o}
-                  value={`${formatCriterion(col, o)} ${o}`}
-                  data-raw={o}
-                  data-checked={lower.includes(o.toLowerCase())}
-                  title={empty ? "No rows match this with the current filters" : undefined}
-                  className={cn(
-                    empty &&
-                      "text-amber-600/70 data-selected:bg-amber-50 data-selected:text-amber-700/80 dark:text-amber-300/60 dark:data-selected:bg-amber-400/10 dark:data-selected:text-amber-300/80"
-                  )}
-                  onSelect={() => {
-                    toggle(o)
-                    setQuery("")
-                  }}
-                >
-                  {formatCriterion(col, o)}
-                  {empty ? <span className="sr-only"> (no matching rows)</span> : null}
-                </CommandItem>
-              )
-            })}
-          </CommandGroup>
-        </CommandList>
-      </Command>
-    </div>
+      <Stack spacing={1.5}>
+        <Typography variant="subtitle2">Search text</Typography>
+        <TextField value={text} onChange={(e) => setText(e.target.value)} autoFocus fullWidth helperText="Matches rows containing every word, in any column." />
+        <Toolbar variant="panelBar">
+          <span />
+          <Button variant="text" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="contained" type="submit" disabled={!text.trim()}>
+            Save filter
+          </Button>
+        </Toolbar>
+      </Stack>
+    </Paper>
   )
 }
