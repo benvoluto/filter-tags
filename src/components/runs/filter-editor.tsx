@@ -93,14 +93,6 @@ function highlightedItem(input: HTMLElement) {
   return input.closest("[cmdk-root]")?.querySelector<HTMLElement>('[cmdk-item][data-selected="true"]') ?? null
 }
 
-function KeyboardHint({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="px-1 text-[11px] text-muted-foreground [@media(hover:none)]:hidden [&_kbd]:font-sans [&_kbd]:font-medium [&_kbd]:text-foreground/70">
-      {children}
-    </p>
-  )
-}
-
 export function FilterEditor(props: FilterEditorProps) {
   if (props.initial?.kind === "search") {
     return <SearchFilterEditor initial={props.initial} onSubmit={props.onSubmit} onCancel={props.onCancel} />
@@ -318,10 +310,6 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
             </CommandGroup>
           </CommandList>
         </Command>
-        <KeyboardHint>
-          <kbd>↑</kbd>
-          <kbd>↓</kbd> choose · <kbd>Space</kbd> select · <kbd>Esc</kbd> cancel
-        </KeyboardHint>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           {advancedButton}
           <Button variant="ghost" size="sm" className="ml-auto" onClick={onCancel}>
@@ -381,14 +369,6 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
         returnsNoRows={returnsNoRowsFor(0)}
         autoFocus
       />
-
-      {COMPARATOR_MAP[row.comparator].arity === "multi" ? (
-        <KeyboardHint>
-          <kbd>↑</kbd>
-          <kbd>↓</kbd> choose · <kbd>Space</kbd> add · <kbd>Enter</kbd> {initial ? "save" : "add"} filter ·{" "}
-          <kbd>Esc</kbd> cancel
-        </KeyboardHint>
-      ) : null}
 
       {footer}
     </form>
