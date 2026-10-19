@@ -50,7 +50,7 @@ exists:
 
 | Redesign control | Built on |
 |---|---|
-| Applied filter chip | `FilterChipAndPopover`, unmodified: bold column, then the operator in regular weight and secondary ink ("is any of", "equals", "is not", "greater than"…), then the value in its blue box (ellipsized at 200px; "+ 2 more" for advanced filters). Operators with no value ("is empty") go in the box so the chip still reads as applied. A tooltip shows the full criteria. |
+| Applied filter chip | `FilterChipAndPopover`, unmodified: bold column, then the operator in regular weight and secondary ink ("is" for a single value, "is any of" for several, "equals", "is not", "greater than"…), then the value in its blue box (ellipsized at 200px; "+ 2 more" for advanced filters). Operators with no value ("is empty") go in the box so the chip still reads as applied. A tooltip shows the full criteria. |
 | Partial ("quick") filter, **Add filter** | `FilterChipAndPopover`'s empty state (dashed, `+`) — how staff shows *Run Status*, *Version State*… before a value is applied. |
 | Search | Adapted `TextSearch` (above), placeholder "Search", 220px (staff's width on the runs and tasks pages). **Save as filter** sits beside it once there's a query. |
 | Filter row | Staff's flow-runs layout: `Stack` row (space-between, wrap, gap 1) → `FilterBar` left, actions right. With no filters it is one line. Once a filter is applied, search moves to its own line (with the views menu and Save view) and the filters — partial filters, chips, Add filter, Clear filters, Match all — get a line beneath it. Clear filters and Match all only appear while a filter is applied. |

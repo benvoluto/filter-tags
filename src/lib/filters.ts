@@ -173,7 +173,7 @@ function describeCondition(c: Condition, full: boolean): string {
   if (cmp.arity === "single") return `${col.label} is ${vals[0] ?? "…"}`
   if (c.comparator === "is") {
     if (full && vals.length > 1) return `${col.label} is any of: ${vals.join(", ")}`
-    return `${col.label}: ${vals.join(", ")}`
+    return `${col.label} is ${vals.join(", ")}`
   }
   if (full && vals.length > 1) return `${col.label} ${cmp.label} any of: ${vals.join(", ")}`
   return `${col.label} ${cmp.short} ${vals.join(", ")}`
@@ -194,9 +194,9 @@ function operatorPhrase(c: Condition): string {
   const col = COLUMN_MAP[c.column]
   const many = c.values.length > 1
   switch (c.comparator) {
-    // The two list operators read as chosen in the panel, so "is any of" with one value still says so.
+    // "is any of" with a single value reads as plain "is" ("Status is Failed").
     case "is":
-      return "is any of"
+      return many ? "is any of" : "is"
     case "equals":
       return "equals"
     case "is_not":
