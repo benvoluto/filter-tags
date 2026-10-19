@@ -202,21 +202,23 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     </>
   )
 
-  /** Clear filters and Match all: they act on the filters, so they end the filters line. */
+  /**
+   * Clear filters and Match all: they act on the filters, so they end the filters line — which only
+   * exists once a filter is applied. With no filters there is nothing to clear or match.
+   */
   const filterActions = (
     <Stack direction="row" alignItems="center" gap={1} sx={{ minHeight: FILTER_HEIGHT }}>
-      {hasFilters &&
-        (showViews ? (
-          <Tooltip title="Clear filters">
-            <IconButton aria-label="Clear filters" onClick={clearFilters}>
-              <FunnelSimpleXIcon size={16} />
-            </IconButton>
-          </Tooltip>
-        ) : (
-          <Button variant="text" startIcon={<FunnelSimpleXIcon size={16} />} onClick={clearFilters}>
-            Clear filters
-          </Button>
-        ))}
+      {showViews ? (
+        <Tooltip title="Clear filters">
+          <IconButton aria-label="Clear filters" onClick={clearFilters}>
+            <FunnelSimpleXIcon size={16} />
+          </IconButton>
+        </Tooltip>
+      ) : (
+        <Button variant="text" startIcon={<FunnelSimpleXIcon size={16} />} onClick={clearFilters}>
+          Clear filters
+        </Button>
+      )}
       <Tooltip title={matchMode === "all" ? "Rows must match every filter" : "Rows may match any filter"}>
         <FormControlLabel
           sx={{ marginLeft: 0, marginRight: 0, gap: 0.5, whiteSpace: "nowrap" }}
@@ -299,7 +301,7 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
                 />
                 {!hasFilters && filterControls}
               </FilterBar>
-              {hasFilters ? saveViewButton : filterActions}
+              {hasFilters && saveViewButton}
             </Stack>
             {hasFilters && (
               <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
