@@ -1,54 +1,55 @@
 "use client"
 
 import * as React from "react"
-import Button from "@mui/material/Button"
-import Chip, { type ChipProps } from "@mui/material/Chip"
-import FormControlLabel from "@mui/material/FormControlLabel"
-import IconButton from "@mui/material/IconButton"
-import Link from "@mui/material/Link"
-import Pagination from "@mui/material/Pagination"
-import Stack from "@mui/material/Stack"
-import Switch from "@mui/material/Switch"
-import Table from "@mui/material/Table"
-import TableBody from "@mui/material/TableBody"
-import TableCell from "@mui/material/TableCell"
-import TableContainer from "@mui/material/TableContainer"
-import TableHead from "@mui/material/TableHead"
-import TableRow from "@mui/material/TableRow"
-import Toolbar from "@mui/material/Toolbar"
-import Typography from "@mui/material/Typography"
-import AddIcon from "@mui/icons-material/Add"
-import BookmarkAddOutlinedIcon from "@mui/icons-material/BookmarkAddOutlined"
-import FilterAltOffOutlinedIcon from "@mui/icons-material/FilterAltOffOutlined"
+import { Button, FormControlLabel, IconButton, Link, Stack, Switch, Tooltip } from "@mui/material"
+import { type GridColDef, type GridSortModel } from "@mui/x-data-grid"
+import { BookmarkSimpleIcon, FunnelSimpleXIcon } from "@phosphor-icons/react"
 
-import { COLUMNS, ROWS, formatCell, isEmptyValue, type ColumnKey, type RunRow } from "@/lib/data"
+import { NoRecordsOverlay, NotableDataGrid, Tag, type TagColor, Text, colors, useTableState } from "common"
+import { FilterBar } from "@/vivaa/staff/components/Layout/FilterBar"
+import { FILTER_HEIGHT } from "@/vivaa/staff/components/FiltersV2/constants"
+import type { TextSearchHandle } from "@/vivaa/staff/components/FiltersV2/TextSearch"
+import { COLUMNS, COLUMN_MAP, ROWS, formatCell, isEmptyValue, type ColumnKey, type RunRow } from "@/lib/data"
 import { filterColumns, matchFilters, matchSearch, newFilterId, type Filter, type MatchMode } from "@/lib/filters"
-import type { SortDir, SortRule } from "@/lib/sort"
+import type { SortRule } from "@/lib/sort"
 import { makeView, viewMatchesState, type SavedView } from "@/lib/views"
 import { ColumnHeader } from "./column-header"
 import { FilterChip } from "./filter-chip"
 import { FilterEditor, type FilterDraft } from "./filter-editor"
-import { FilterPopover } from "./filter-popover"
+import { HeaderFilterPopover } from "./filter-popover"
 import { FilterProbeProvider } from "./filter-probe"
-import { QuickFilter } from "./quick-filter"
-import { SearchBox } from "./search-box"
+import { AddFilter, QuickFilter } from "./quick-filter"
+import { SEARCH_PLACEHOLDER, SearchBox } from "./search-box"
 import { ViewsMenu } from "./views-menu"
-
-const PAGE_SIZE = 17 // 50 rows → 3 pages
 
 /** Partial filters shown next to the search box: column chosen, criteria pending. */
 const QUICK_FILTERS: ColumnKey[] = ["customer", "trigger", "duration"]
 
-const STATUS_COLOR: Record<string, ChipProps["color"]> = {
+/** Status → staff `Tag` colour, following FLOW_RUN_TAG_PROPS (web/staff/…/Flows/Runs/Run/Status.tsx). */
+const STATUS_TAG_COLOR: Record<string, TagColor> = {
   Completed: "success",
   Failed: "error",
   "Needs Review": "warning",
-  Running: "info",
-  Cancelled: "default",
+  Running: "primary",
+  Cancelled: "error",
 }
 
-/** Columns rendered as underlined entity links, like Notable's "Initiated By" / "Recipient". */
+/** Columns rendered as entity links (the theme's MuiDataGrid cell link style: ink, blue on hover). */
 const LINK_COLUMNS = new Set<ColumnKey>(["runId", "customer", "owner"])
+
+/** Page sizes the MIT grid allows (staff offers 250 and 500 too; the MIT grid caps pages at 100). */
+const PAGE_SIZE_OPTIONS = [5, 25, 50, 100]
+
+const DEFAULT_SORT: GridSortModel = [{ field: "started", sort: "desc" }]
+
+function toSortRule(sortModel: GridSortModel): SortRule | null {
+  const [first] = sortModel
+  return first?.sort ? { key: first.field as ColumnKey, dir: first.sort } : null
+}
+
+function toSortModel(sort: SortRule | null): GridSortModel {
+  return sort ? [{ field: sort.key, sort: sort.dir }] : []
+}
 
 function compareRows(a: RunRow, b: RunRow, sort: SortRule | null) {
   if (!sort) return 0
@@ -65,24 +66,44 @@ function compareRows(a: RunRow, b: RunRow, sort: SortRule | null) {
 /** "filters": filters only · "quick": + partial (quick) filters · "views": + quick filters and saved views */
 export type PrototypeVariant = "filters" | "quick" | "views"
 
+/** Lets the grid's empty overlay (a slot component) reach the page's reset. */
+const ResetContext = React.createContext<(() => void) | null>(null)
+
+function RunsNoRowsOverlay() {
+  const reset = React.useContext(ResetContext)
+  return (
+    <NoRecordsOverlay
+      customMessage={{
+        title: "No runs match these filters",
+        action: reset ? (
+          <Button variant="outlined" onClick={reset}>
+            Clear search and filters
+          </Button>
+        ) : undefined,
+      }}
+    />
+  )
+}
+
 export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant }) {
   const [query, setQuery] = React.useState("")
   const [filters, setFilters] = React.useState<Filter[]>([])
-  const [sort, setSort] = React.useState<SortRule | null>({ key: "started", dir: "desc" })
   const [matchMode, setMatchMode] = React.useState<MatchMode>("all")
-  const [page, setPage] = React.useState(1)
-  const [addAnchor, setAddAnchor] = React.useState<HTMLButtonElement | null>(null)
-  const [addOpen, setAddOpen] = React.useState(false)
+  const [isAddOpen, setIsAddOpen] = React.useState(false)
+  const [headerFilter, setHeaderFilter] = React.useState<{ column: ColumnKey; anchor: Element } | null>(null)
   const [views, setViews] = React.useState<SavedView[]>([])
   const [selectedViewId, setSelectedViewId] = React.useState<string | null>(null)
-  const searchRef = React.useRef<HTMLTextAreaElement>(null)
-  const toolbarRef = React.useRef<HTMLDivElement>(null)
-  const leftRef = React.useRef<HTMLDivElement>(null)
-  const rightRef = React.useRef<HTMLDivElement>(null)
-  const stackActions = useStackedActions(toolbarRef, leftRef, rightRef)
+  const searchRef = React.useRef<TextSearchHandle>(null)
+
+  // Staff's table state hook: page + page size + sort model, in the grid's own shapes.
+  const { pagination, sort: sortState, paginationModel, goToFirstPage } = useTableState({
+    defaultPageSize: 25,
+    defaultSortModel: DEFAULT_SORT,
+  })
+  const sort = toSortRule(sortState.sortModel)
+  const setSort = (rule: SortRule | null) => sortState.setSortModel(toSortModel(rule))
 
   // Single-key shortcuts, only when nothing on the page has focus: F add filter · S search · C clear.
-  // (MUI popovers restore focus to whatever was focused when they opened — the body, for F.)
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.isComposing) return
@@ -91,45 +112,57 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
       const key = e.key.toLowerCase()
       if (key === "f") {
         e.preventDefault()
-        setAddOpen(true)
+        setIsAddOpen(true)
       } else if (key === "s") {
         e.preventDefault()
-        searchRef.current?.focus()
+        // TextSearch puts its aria-label on the TextField root, so find the input by placeholder.
+        document.querySelector<HTMLInputElement>(`input[placeholder="${SEARCH_PLACEHOLDER}"]`)?.focus()
       } else if (key === "c") {
         e.preventDefault()
         setFilters((fs) => (fs.length ? [] : fs))
-        setPage(1)
+        goToFirstPage()
       }
     }
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
-  }, [])
+  }, [goToFirstPage])
 
   const rows = React.useMemo(() => {
+    const rule = toSortRule(sortState.sortModel)
     const visible = ROWS.filter((r) => matchFilters(r, filters, matchMode) && matchSearch(r, query))
-    return [...visible].sort((a, b) => compareRows(a, b, sort))
-  }, [filters, matchMode, query, sort])
+    return [...visible].sort((a, b) => compareRows(a, b, rule))
+  }, [filters, matchMode, query, sortState.sortModel])
 
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
-  const currentPage = Math.min(page, pageCount)
-  const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  // The grid runs in server mode (as on every staff page): it is handed one page and the total.
+  const { page, pageSize } = paginationModel
+  const pageRows = rows.slice(page * pageSize, (page + 1) * pageSize)
 
   const addFilter = (draft: FilterDraft) => {
     setFilters((fs) => [...fs, { ...draft, id: newFilterId() }])
-    setPage(1)
+    goToFirstPage()
   }
   const updateFilter = (id: string, draft: FilterDraft) => {
     setFilters((fs) => fs.map((f) => (f.id === id ? { ...draft, id } : f)))
-    setPage(1)
+    goToFirstPage()
   }
-  const removeFilter = (id: string) => setFilters((fs) => fs.filter((f) => f.id !== id))
+  const removeFilter = (id: string) => {
+    setFilters((fs) => fs.filter((f) => f.id !== id))
+    goToFirstPage()
+  }
+  const clearFilters = () => {
+    setFilters([])
+    goToFirstPage()
+  }
   const saveSearchAsFilter = () => {
     const text = query.trim()
     if (!text) return
     addFilter({ kind: "search", column: "runId", comparator: "contains", values: [text] })
-    setQuery("")
+    searchRef.current?.clear()
   }
-  const applySort = (key: ColumnKey, dir: SortDir | null) => setSort(dir ? { key, dir } : null)
+  const resetAll = () => {
+    clearFilters()
+    searchRef.current?.clear()
+  }
 
   const filteredColumns = new Set(filters.flatMap(filterColumns))
   // Partial filters: hidden in "filters only", once their column is filtered, or past three filters.
@@ -146,7 +179,7 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     setFilters(view.filters.map((f) => ({ ...f, id: newFilterId() })))
     setSort(view.sort)
     setMatchMode(view.matchMode)
-    setPage(1)
+    goToFirstPage()
   }
   const saveView = () => {
     const view = makeView(`View ${views.length + 1}`, filters, sort, matchMode)
@@ -154,204 +187,173 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     setSelectedViewId(view.id)
   }
 
-  const start = rows.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0
-  const end = (currentPage - 1) * PAGE_SIZE + pageRows.length
+  const columns: GridColDef<RunRow>[] = COLUMNS.map((col) => ({
+    field: col.key,
+    headerName: col.label,
+    flex: 1,
+    minWidth: (col.minWidth ?? 120) + 24,
+    align: col.align ?? "left",
+    headerAlign: col.align ?? "left",
+    renderHeader: () => (
+      <ColumnHeader
+        column={col}
+        isFiltered={filteredColumns.has(col.key)}
+        onOpenFilter={(anchor) => setHeaderFilter({ column: col.key, anchor })}
+      />
+    ),
+    renderCell: ({ row }) => <RunCell column={col.key} row={row} />,
+  }))
 
   return (
     <FilterProbeProvider filters={filters} matchMode={matchMode} query={query}>
-      <Stack spacing={1.5}>
-        {/* [views · search · partial filters · chips · Add filter] ··· [Clear · Match all · Save view] */}
-        <Toolbar variant="filters" ref={toolbarRef}>
-          <Stack ref={leftRef} direction="row" spacing={1} useFlexGap>
-            {showViews ? (
-              <ViewsMenu
-                views={views}
-                selectedId={selectedViewId}
-                edited={viewEdited}
-                onSelect={applyView}
-                onRename={(id, name) => setViews((vs) => vs.map((v) => (v.id === id ? { ...v, name } : v)))}
-              />
-            ) : null}
-            <SearchBox
-              value={query}
-              onChange={(v) => {
-                setQuery(v)
-                setPage(1)
-              }}
-              resultCount={rows.length}
-              onSaveAsFilter={saveSearchAsFilter}
-              inputRef={searchRef}
-            />
-            {quickFilters.map((key) => (
-              <QuickFilter key={key} column={key} onAdd={addFilter} />
-            ))}
-            {filters.map((f) => (
-              <FilterChip key={f.id} filter={f} onChange={(d) => updateFilter(f.id, d)} onRemove={() => removeFilter(f.id)} />
-            ))}
-            <Button variant="dashed" startIcon={<AddIcon />} ref={setAddAnchor} onClick={() => setAddOpen(true)}>
-              Add filter
-            </Button>
-            <FilterPopover open={addOpen && Boolean(addAnchor)} anchorEl={addAnchor} onClose={() => setAddOpen(false)}>
-              <FilterEditor
-                onCancel={() => setAddOpen(false)}
-                onSubmit={(draft) => {
-                  addFilter(draft)
-                  setAddOpen(false)
+      <ResetContext.Provider value={filters.length || query ? resetAll : null}>
+        <Stack gap={2}>
+          {/* Staff's filter row: FilterBar on the left, page actions on the right, wrapping. */}
+          <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+            <FilterBar>
+              {showViews && (
+                <ViewsMenu
+                  views={views}
+                  selectedId={selectedViewId}
+                  edited={viewEdited}
+                  onSelect={applyView}
+                  onRename={(id, name) => setViews((vs) => vs.map((v) => (v.id === id ? { ...v, name } : v)))}
+                />
+              )}
+              <SearchBox
+                ref={searchRef}
+                value={query}
+                onChange={(next) => {
+                  setQuery(next)
+                  goToFirstPage()
                 }}
+                resultCount={rows.length}
+                onSaveAsFilter={saveSearchAsFilter}
               />
-            </FilterPopover>
-          </Stack>
-
-          <Stack ref={rightRef} direction="row" spacing={1}>
-            <Stack direction={stackActions && !showViews ? "column-reverse" : "row"} spacing={1}>
-              {filters.length > 0 && showViews ? (
-                <IconButton data-toolbar-action aria-label="Clear filters" title="Clear filters" onClick={() => setFilters([])}>
-                  <FilterAltOffOutlinedIcon />
-                </IconButton>
-              ) : filters.length > 0 ? (
-                <Button data-toolbar-action variant="text" startIcon={<FilterAltOffOutlinedIcon />} onClick={() => setFilters([])}>
-                  Clear filters
-                </Button>
-              ) : null}
-              <FormControlLabel
-                data-toolbar-action
-                label={showViews ? "Match all" : "Match all filters"}
-                title={matchMode === "all" ? "Rows must match every filter" : "Rows may match any filter"}
-                control={
-                  <Switch
-                    checked={matchMode === "all"}
-                    onChange={(_, all) => {
-                      setMatchMode(all ? "all" : "any")
-                      setPage(1)
-                    }}
-                  />
-                }
-              />
-            </Stack>
-            {canSaveView ? (
-              <Button
-                data-toolbar-action
-                variant="contained"
-                startIcon={<BookmarkAddOutlinedIcon />}
-                onClick={saveView}
-                title={selectedView ? `Save as a new view (${selectedView.name} has been edited)` : undefined}
-              >
-                Save view
-              </Button>
-            ) : null}
-          </Stack>
-        </Toolbar>
-
-        <TableContainer>
-          <Table aria-label="Flow runs">
-            <TableHead>
-              <TableRow>
-                {COLUMNS.map((col) => (
-                  <ColumnHeader
-                    key={col.key}
-                    column={col}
-                    sortDir={sort?.key === col.key ? sort.dir : undefined}
-                    filtered={filteredColumns.has(col.key)}
-                    onSort={(dir) => applySort(col.key, dir)}
-                    onAddFilter={addFilter}
-                  />
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {pageRows.map((row) => (
-                <TableRow key={row.runId} hover>
-                  {COLUMNS.map((col) => {
-                    const value = row[col.key]
-                    return (
-                      <TableCell key={col.key} align={col.align ?? "left"}>
-                        {isEmptyValue(value) ? (
-                          <Typography variant="body2" color="text.secondary">
-                            —
-                          </Typography>
-                        ) : col.key === "status" ? (
-                          <Chip variant="soft" size="small" color={STATUS_COLOR[value as string]} label={value as string} />
-                        ) : col.key === "errors" && (value as number) > 0 ? (
-                          <Typography variant="subtitle2" color="error">
-                            {formatCell(col, value)}
-                          </Typography>
-                        ) : LINK_COLUMNS.has(col.key) ? (
-                          <Link href="#" onClick={(e) => e.preventDefault()}>
-                            {formatCell(col, value)}
-                          </Link>
-                        ) : (
-                          formatCell(col, value)
-                        )}
-                      </TableCell>
-                    )
-                  })}
-                </TableRow>
+              {quickFilters.map((key) => (
+                <QuickFilter key={key} column={key} onAdd={addFilter} />
               ))}
-              {pageRows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={COLUMNS.length} align="center">
-                    <Typography variant="body2" color="text.secondary">
-                      No runs match these filters.
-                    </Typography>
-                    {filters.length || query ? (
-                      <Button
-                        variant="text"
-                        onClick={() => {
-                          setFilters([])
-                          setQuery("")
-                        }}
-                      >
-                        Reset
-                      </Button>
-                    ) : null}
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              {filters.map((f) => (
+                <FilterChip key={f.id} filter={f} onChange={(d) => updateFilter(f.id, d)} onRemove={() => removeFilter(f.id)} />
+              ))}
+              <AddFilter isOpen={isAddOpen} setIsOpen={setIsAddOpen} onAdd={addFilter} />
+            </FilterBar>
 
-        <Toolbar variant="panelBar">
-          <Typography variant="body2" color="text.secondary">
-            {rows.length ? `Showing ${start}–${end} of ` : ""}
+            <Stack direction="row" alignItems="center" gap={1} sx={{ minHeight: FILTER_HEIGHT }}>
+              {filters.length > 0 &&
+                (showViews ? (
+                  <Tooltip title="Clear filters">
+                    <IconButton aria-label="Clear filters" onClick={clearFilters}>
+                      <FunnelSimpleXIcon size={16} />
+                    </IconButton>
+                  </Tooltip>
+                ) : (
+                  <Button variant="text" startIcon={<FunnelSimpleXIcon size={16} />} onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                ))}
+              <Tooltip title={matchMode === "all" ? "Rows must match every filter" : "Rows may match any filter"}>
+                <FormControlLabel
+                  sx={{ marginLeft: 0, marginRight: 0, gap: 0.5, whiteSpace: "nowrap" }}
+                  label={<Text variant="body2">{showViews ? "Match all" : "Match all filters"}</Text>}
+                  control={
+                    <Switch
+                      size="small"
+                      checked={matchMode === "all"}
+                      onChange={(_, all) => {
+                        setMatchMode(all ? "all" : "any")
+                        goToFirstPage()
+                      }}
+                    />
+                  }
+                />
+              </Tooltip>
+              {canSaveView && (
+                <Button
+                  variant="contained"
+                  startIcon={<BookmarkSimpleIcon size={16} />}
+                  onClick={saveView}
+                  title={selectedView ? `Save as a new view (${selectedView.name} has been edited)` : undefined}
+                >
+                  Save view
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+
+          <NotableDataGrid<RunRow>
+            data={pageRows}
+            isPending={false}
+            columns={columns}
+            getRowId={(row) => row.runId}
+            rowCount={rows.length}
+            pagination={pagination}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            sort={{
+              sortModel: sortState.sortModel,
+              setSortModel: (model) => {
+                sortState.setSortModel(model)
+                goToFirstPage()
+              },
+            }}
+            slots={{ noRowsOverlay: RunsNoRowsOverlay }}
+            height="calc(100vh - 210px)"
+          />
+
+          <Text variant="caption" color={colors.content.dark}>
             {rows.length} runs{rows.length !== ROWS.length ? ` (filtered from ${ROWS.length})` : ""}
-          </Typography>
-          <Pagination count={pageCount} page={currentPage} onChange={(_, p) => setPage(p)} />
-        </Toolbar>
-      </Stack>
+          </Text>
+        </Stack>
+
+        <HeaderFilterPopover anchorElement={headerFilter?.anchor ?? null} onClose={() => setHeaderFilter(null)}>
+          {headerFilter && (
+            <FilterEditor
+              key={headerFilter.column}
+              column={headerFilter.column}
+              onCancel={() => setHeaderFilter(null)}
+              onSubmit={(draft) => {
+                addFilter(draft)
+                setHeaderFilter(null)
+              }}
+            />
+          )}
+        </HeaderFilterPopover>
+      </ResetContext.Provider>
     </FilterProbeProvider>
   )
 }
 
-const TOOLBAR_GAP = 8
-
-/**
- * True when the toolbar's left items would wrap if the right-hand actions sat in a single row.
- * Measures the individual actions (their width doesn't change when stacked) to avoid flip-flopping.
- */
-function useStackedActions(
-  toolbarRef: React.RefObject<HTMLDivElement | null>,
-  leftRef: React.RefObject<HTMLDivElement | null>,
-  rightRef: React.RefObject<HTMLDivElement | null>
-) {
-  const [stacked, setStacked] = React.useState(false)
-  React.useLayoutEffect(() => {
-    const toolbar = toolbarRef.current
-    const left = leftRef.current
-    const right = rightRef.current
-    if (!toolbar || !left || !right) return
-    const rowWidth = (kids: Element[]) =>
-      kids.reduce((w, k) => w + k.getBoundingClientRect().width, 0) + TOOLBAR_GAP * Math.max(0, kids.length - 1)
-    const actions = Array.from(right.querySelectorAll("[data-toolbar-action]"))
-    const measure = () => {
-      const available = toolbar.clientWidth - rowWidth(actions) - TOOLBAR_GAP
-      setStacked(rowWidth(Array.from(left.children)) > available + 0.5)
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(toolbar)
-    for (const el of [...Array.from(left.children), ...actions]) ro.observe(el)
-    return () => ro.disconnect()
-  })
-  return stacked
+/** One cell: staff `Tag` for status, entity links, error counts in the error colour, — for empty. */
+function RunCell({ column, row }: { column: ColumnKey; row: RunRow }) {
+  const col = COLUMN_MAP[column]
+  const value = row[column]
+  if (isEmptyValue(value)) {
+    return (
+      <Text variant="body2" color={colors.content.dark} component="span">
+        —
+      </Text>
+    )
+  }
+  if (column === "status") {
+    return <Tag color={STATUS_TAG_COLOR[value as string] ?? "default"}>{value as string}</Tag>
+  }
+  if (column === "errors" && (value as number) > 0) {
+    return (
+      <Text variant="body2" color="error" bold component="span">
+        {formatCell(col, value)}
+      </Text>
+    )
+  }
+  if (LINK_COLUMNS.has(column)) {
+    return (
+      <Link href="#" underline="hover" onClick={(e) => e.preventDefault()}>
+        {formatCell(col, value)}
+      </Link>
+    )
+  }
+  return (
+    <Text variant="body2" component="span">
+      {formatCell(col, value)}
+    </Text>
+  )
 }

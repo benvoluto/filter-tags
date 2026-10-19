@@ -1,29 +1,32 @@
 "use client"
 
 import * as React from "react"
-import Autocomplete from "@mui/material/Autocomplete"
-import Button from "@mui/material/Button"
-import Checkbox from "@mui/material/Checkbox"
-import Dialog from "@mui/material/Dialog"
-import DialogActions from "@mui/material/DialogActions"
-import DialogContent from "@mui/material/DialogContent"
-import DialogContentText from "@mui/material/DialogContentText"
-import DialogTitle from "@mui/material/DialogTitle"
-import Grid from "@mui/material/Grid"
-import IconButton from "@mui/material/IconButton"
-import ListItemIcon from "@mui/material/ListItemIcon"
-import ListItemText from "@mui/material/ListItemText"
-import MenuItem from "@mui/material/MenuItem"
-import MenuList from "@mui/material/MenuList"
-import Paper from "@mui/material/Paper"
-import Stack from "@mui/material/Stack"
-import TextField from "@mui/material/TextField"
-import Toolbar from "@mui/material/Toolbar"
-import Typography from "@mui/material/Typography"
-import AddIcon from "@mui/icons-material/Add"
-import ArrowBackIcon from "@mui/icons-material/ArrowBack"
-import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined"
-import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined"
+import {
+  Autocomplete,
+  Box,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Grid,
+  IconButton,
+  InputLabel,
+  ListItemIcon,
+  ListItemText,
+  MenuItem,
+  MenuList,
+  Stack,
+  TextField,
+  type SxProps,
+  type Theme,
+} from "@mui/material"
+import { ArrowLeftIcon, PlusIcon, SlidersHorizontalIcon, TrashIcon } from "@phosphor-icons/react"
+
+import { Text, colors } from "common"
+import { POPOVER_FIELD_MINIMUM_WIDTH } from "@/vivaa/staff/components/FiltersV2/constants"
 
 import { COLUMN_ICONS } from "@/lib/column-icons"
 import { COLUMNS, COLUMN_MAP, distinctValues, formatCriterion, type ColumnKey } from "@/lib/data"
@@ -38,6 +41,43 @@ import {
 } from "@/lib/filters"
 import { useFilterProbe } from "./filter-probe"
 import { useRepositionPopover } from "./filter-popover"
+
+/*
+ * The filter editor: what opens inside staff's filter popover (FilterChipAndPopover, or
+ * HeaderFilterPopover for column headers), which supplies the 16px padding and the border/shadow.
+ * Styled the way staff's FiltersV2 fields are: small MUI fields at POPOVER_FIELD_MINIMUM_WIDTH,
+ * labels as InputLabel (staff's FormField), Phosphor icons at 16px in gray[45], `sx` for layout.
+ */
+
+/** Basic panel: staff's popover field width. Advanced: wide enough for a five-part condition row. */
+const BASIC_WIDTH = POPOVER_FIELD_MINIMUM_WIDTH
+const ADVANCED_WIDTH = "min(48rem, calc(100vw - 64px))"
+const ICON_COLOR = colors.extended.gray["45"]
+
+/**
+ * Staff's theme pads `.MuiSelect-select` to 2px 14px, so a small select is ~24px tall. In this panel
+ * selects sit beside 32px autocompletes, so they are padded to staff's FILTER_HEIGHT (32px).
+ */
+const SELECT_SX: SxProps<Theme> = { "& .MuiSelect-select": { paddingY: "6px" } }
+
+/** A row of panel controls: the first child on the left, the rest pushed right. */
+const BAR_SX: SxProps<Theme> = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 1,
+  "& > :first-of-type:not(:last-child)": { marginRight: "auto", minWidth: 0 },
+}
+
+/** Scrolling value/column lists bleed to the popover edges, ruled top and bottom. */
+const LIST_SX: SxProps<Theme> = {
+  maxHeight: 260,
+  overflowY: "auto",
+  marginX: -2,
+  paddingY: 0.5,
+  borderTop: `1px solid ${colors.border.light}`,
+  borderBottom: `1px solid ${colors.border.light}`,
+}
 
 export type FilterDraft = Omit<Filter, "id">
 
@@ -156,41 +196,41 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
   }
 
   const advancedButton = (
-    <Button variant={advanced ? "contained" : "outlined"} color={advanced ? "secondary" : "primary"} startIcon={<TuneOutlinedIcon />} onClick={toggleAdvanced}>
+    <Button variant="text" size="small" startIcon={<SlidersHorizontalIcon size={16} />} onClick={toggleAdvanced}>
       {advanced ? "Basic filter" : "Advanced filter"}
     </Button>
   )
   const actions = (
-    <Toolbar variant="panelBar">
+    <Box sx={BAR_SX}>
       {advancedButton}
-      <Button variant="text" onClick={onCancel}>
+      <Button variant="outlined" size="small" onClick={onCancel}>
         Cancel
       </Button>
-      <Button variant="contained" type="submit" disabled={!canSubmit}>
+      <Button variant="contained" size="small" type="submit" disabled={!canSubmit}>
         {initial ? "Save filter" : "Add filter"}
       </Button>
-    </Toolbar>
+    </Box>
   )
 
   // ── Advanced: up to 10 criteria lines joined with and/or ─────────────────────────────────
   if (advanced) {
     const joins = new Set(rows.slice(1).map((r) => r.join))
     return (
-      <Paper
-        variant="panelWide"
+      <Box
         component="form"
+        sx={{ width: ADVANCED_WIDTH }}
         onSubmit={(e: React.FormEvent) => {
           e.preventDefault()
           submit(rows)
         }}
       >
         <Stack spacing={1.5}>
-          <Toolbar variant="panelBar">
-            <Typography variant="subtitle2">Advanced filter</Typography>
-            <Typography variant="caption" color="text.secondary">
+          <Box sx={BAR_SX}>
+            <InputLabel>Advanced filter</InputLabel>
+            <Text variant="caption" color={colors.content.dark}>
               {rows.length} of {MAX_CONDITIONS} conditions
-            </Typography>
-          </Toolbar>
+            </Text>
+          </Box>
 
           <Stack spacing={1}>
             {rows.map((row, i) => (
@@ -209,21 +249,22 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
             ))}
           </Stack>
 
-          <Toolbar variant="panelBar">
+          <Box sx={BAR_SX}>
             <Button
               variant="text"
-              startIcon={<AddIcon />}
+              size="small"
+              startIcon={<PlusIcon size={16} />}
               disabled={rows.length >= MAX_CONDITIONS}
               onClick={() => setRows((rs) => [...rs, newRow({ join: rs[rs.length - 1]?.join ?? "and" })])}
             >
               Add condition
             </Button>
             {joins.size > 1 ? (
-              <Typography variant="caption" color="text.secondary">
+              <Text variant="caption" color={colors.content.dark}>
                 AND conditions are evaluated before OR.
-              </Typography>
+              </Text>
             ) : null}
-          </Toolbar>
+          </Box>
 
           {actions}
         </Stack>
@@ -246,7 +287,7 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
             </Button>
           </DialogActions>
         </Dialog>
-      </Paper>
+      </Box>
     )
   }
 
@@ -255,38 +296,40 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
   if (!row.column) {
     const columnIsEmpty = columnReturnsNoRowsFor(0)
     return (
-      <Paper variant="panel">
+      <Box sx={{ width: BASIC_WIDTH }}>
         <Stack spacing={1}>
-          <Typography variant="subtitle2">Filter by</Typography>
-          <MenuList autoFocusItem aria-label="Columns">
+          <InputLabel>Filter by</InputLabel>
+          <MenuList autoFocusItem aria-label="Columns" sx={LIST_SX}>
             {COLUMNS.map((c) => {
               const empty = columnIsEmpty?.(c.key) ?? false
               return (
                 <MenuItem key={c.key} onClick={() => changeColumn(0, c.key)} title={empty ? NO_ROWS_COLUMN : undefined}>
+                  <ListItemIcon>
+                    <ColumnIcon column={c.key} warning={empty} />
+                  </ListItemIcon>
                   <ListItemText primary={c.label} slotProps={{ primary: { color: empty ? "warning" : undefined } }} />
                 </MenuItem>
               )
             })}
           </MenuList>
-          <Toolbar variant="panelBar">
+          <Box sx={BAR_SX}>
             {advancedButton}
-            <Button variant="text" onClick={onCancel}>
+            <Button variant="outlined" size="small" onClick={onCancel}>
               Cancel
             </Button>
-          </Toolbar>
+          </Box>
         </Stack>
-      </Paper>
+      </Box>
     )
   }
 
   // ── Basic, step 2: operator + criteria ──────────────────────────────────────────────────
   const column = row.column
-  const Icon = COLUMN_ICONS[column]
   const arity = COMPARATOR_MAP[row.comparator].arity
   return (
-    <Paper
-      variant="panel"
+    <Box
       component="form"
+      sx={{ width: BASIC_WIDTH }}
       onSubmit={(e: React.FormEvent) => {
         e.preventDefault()
         submit([row])
@@ -301,20 +344,18 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
       }}
     >
       <Stack spacing={1.5}>
-        <Toolbar variant="panelBar">
-          <Stack direction="row" spacing={0.75}>
+        <Box sx={BAR_SX}>
+          <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
             {!fixedColumn && !initial ? (
-              <IconButton aria-label="Choose a different column" onClick={() => updateRow(0, { column: null, comparator: "is", values: [] })}>
-                <ArrowBackIcon />
+              <IconButton size="small" aria-label="Choose a different column" onClick={() => updateRow(0, { column: null, comparator: "is", values: [] })}>
+                <ArrowLeftIcon size={16} />
               </IconButton>
             ) : null}
-            <Icon fontSize="small" color="action" />
-            <Typography variant="subtitle2" noWrap>
-              {COLUMN_MAP[column].label} filter
-            </Typography>
+            <ColumnIcon column={column} />
+            <InputLabel sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>{COLUMN_MAP[column].label} filter</InputLabel>
           </Stack>
           <ComparatorSelect column={column} value={row.comparator} onChange={(c) => changeComparator(0, c)} />
-        </Toolbar>
+        </Box>
 
         {arity === "multi" ? (
           <ValueList
@@ -330,8 +371,14 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
 
         {actions}
       </Stack>
-    </Paper>
+    </Box>
   )
+}
+
+/** The column's icon, 16px gray[45] (amber when every value would return no rows). */
+function ColumnIcon({ column, warning }: { column: ColumnKey; warning?: boolean }) {
+  const Icon = COLUMN_ICONS[column]
+  return <Icon size={16} color={warning ? colors.warning.default : ICON_COLOR} />
 }
 
 /** Basic multi-select: a MenuList of checkable values. Space toggles, Enter adds the filter. */
@@ -359,6 +406,7 @@ function ValueList({
     <MenuList
       autoFocusItem
       aria-label={`${col.label} values`}
+      sx={LIST_SX}
       // Enter on a value submits the whole filter instead of toggling it.
       onKeyDownCapture={(e) => {
         if (e.key === "Enter") {
@@ -374,7 +422,7 @@ function ValueList({
         return (
           <MenuItem key={o} role="menuitemcheckbox" aria-checked={checked} onClick={() => toggle(o)} title={empty ? NO_ROWS : undefined}>
             <ListItemIcon>
-              <Checkbox checked={checked} tabIndex={-1} />
+              <Checkbox size="small" checked={checked} tabIndex={-1} />
             </ListItemIcon>
             <ListItemText
               primary={formatCriterion(col, o)}
@@ -408,9 +456,9 @@ function CriteriaInput({
   const arity = COMPARATOR_MAP[comparator].arity
   if (arity === "none") {
     return (
-      <Typography variant="caption" color="text.secondary">
+      <Text variant="caption" color={colors.content.dark}>
         No value needed
-      </Typography>
+      </Text>
     )
   }
   if (arity === "multi") {
@@ -458,6 +506,7 @@ function ValuesCombobox({
       multiple
       freeSolo
       fullWidth
+      size="small"
       disableCloseOnSelect
       limitTags={2}
       options={options}
@@ -469,12 +518,12 @@ function ValuesCombobox({
         const empty = returnsNoRows?.(option) ?? false
         return (
           <li key={key} {...props} title={empty ? NO_ROWS : undefined}>
-            <Checkbox checked={selected} tabIndex={-1} />
+            <Checkbox size="small" checked={selected} tabIndex={-1} />
             <ListItemText primary={formatCriterion(col, option)} slotProps={{ primary: { color: empty ? "warning" : undefined } }} />
           </li>
         )
       }}
-      renderInput={(params) => <TextField {...params} placeholder={values.length ? "" : `Select ${col.label.toLowerCase()}…`} />}
+      renderInput={(params) => <TextField {...params} size="small" placeholder={values.length ? "" : `Select ${col.label.toLowerCase()}…`} />}
     />
   )
 }
@@ -499,6 +548,7 @@ function ValueField({
     <Autocomplete<string, false, false, true>
       freeSolo
       fullWidth
+      size="small"
       openOnFocus
       options={options}
       inputValue={value}
@@ -512,7 +562,7 @@ function ValueField({
           <ListItemText primary={formatCriterion(col, option)} secondary={formatCriterion(col, option) !== option ? option : undefined} />
         </li>
       )}
-      renderInput={(params) => <TextField {...params} label={label} autoFocus={autoFocus} />}
+      renderInput={(params) => <TextField {...params} size="small" placeholder={label} slotProps={{ htmlInput: { ...params.inputProps, "aria-label": label } }} autoFocus={autoFocus} />}
     />
   )
 }
@@ -543,11 +593,11 @@ function ConditionRow({
     <Grid container columns={24} spacing={1} role="group" aria-label={`Condition ${index + 1}`}>
       <Grid size={{ xs: 6, sm: 3 }}>
         {index === 0 ? (
-          <Typography variant="caption" color="text.secondary">
+          <Text variant="body2" color={colors.content.dark} sx={{ lineHeight: "32px" }}>
             Where
-          </Typography>
+          </Text>
         ) : (
-          <TextField select fullWidth value={row.join} onChange={(e) => onJoin(e.target.value as Join)} slotProps={{ htmlInput: { "aria-label": "And / or" } }}>
+          <TextField select fullWidth size="small" sx={SELECT_SX} value={row.join} onChange={(e) => onJoin(e.target.value as Join)} slotProps={{ htmlInput: { "aria-label": "And / or" } }}>
             <MenuItem value="and">and</MenuItem>
             <MenuItem value="or">or</MenuItem>
           </TextField>
@@ -557,6 +607,8 @@ function ConditionRow({
         <TextField
           select
           fullWidth
+          size="small"
+          sx={SELECT_SX}
           value={row.column ?? ""}
           onChange={(e) => onColumn(e.target.value as ColumnKey)}
           slotProps={{
@@ -565,12 +617,11 @@ function ConditionRow({
           }}
         >
           {COLUMNS.map((c) => {
-            const Icon = COLUMN_ICONS[c.key]
             const empty = columnReturnsNoRows?.(c.key) ?? false
             return (
               <MenuItem key={c.key} value={c.key} title={empty ? NO_ROWS_COLUMN : undefined}>
                 <ListItemIcon>
-                  <Icon color={empty ? "warning" : "inherit"} />
+                  <ColumnIcon column={c.key} warning={empty} />
                 </ListItemIcon>
                 <ListItemText primary={c.label} slotProps={{ primary: { color: empty ? "warning" : undefined } }} />
               </MenuItem>
@@ -582,7 +633,7 @@ function ConditionRow({
         {row.column ? (
           <ComparatorSelect column={row.column} value={row.comparator} onChange={onComparator} fullWidth />
         ) : (
-          <TextField select fullWidth disabled value="" slotProps={{ select: { displayEmpty: true, renderValue: () => "Operator" } }}>
+          <TextField select fullWidth size="small" sx={SELECT_SX} disabled value="" slotProps={{ select: { displayEmpty: true, renderValue: () => "Operator" } }}>
             <MenuItem value="">Operator</MenuItem>
           </TextField>
         )}
@@ -591,15 +642,15 @@ function ConditionRow({
         {row.column ? (
           <CriteriaInput column={row.column} comparator={row.comparator} values={row.values} onChange={onValues} returnsNoRows={returnsNoRows} />
         ) : (
-          <Typography variant="caption" color="text.secondary">
+          <Text variant="body2" color={colors.content.dark} sx={{ lineHeight: "32px" }}>
             Pick a type first
-          </Typography>
+          </Text>
         )}
       </Grid>
       <Grid size={{ xs: 2, sm: 1 }}>
         {onRemove ? (
-          <IconButton aria-label={`Remove condition ${index + 1}`} onClick={onRemove}>
-            <DeleteOutlinedIcon />
+          <IconButton size="small" aria-label={`Remove condition ${index + 1}`} onClick={onRemove}>
+            <TrashIcon size={16} />
           </IconButton>
         ) : null}
       </Grid>
@@ -621,6 +672,8 @@ function ComparatorSelect({
   return (
     <TextField
       select
+      size="small"
+      sx={SELECT_SX}
       fullWidth={fullWidth}
       value={value}
       onChange={(e) => onChange(e.target.value as Comparator)}
@@ -646,27 +699,29 @@ function SearchFilterEditor({
 }) {
   const [text, setText] = React.useState(initial.values[0] ?? "")
   return (
-    <Paper
-      variant="panel"
+    <Box
       component="form"
+      sx={{ width: BASIC_WIDTH }}
       onSubmit={(e: React.FormEvent) => {
         e.preventDefault()
         if (text.trim()) onSubmit({ ...initial, values: [text.trim()] })
       }}
     >
       <Stack spacing={1.5}>
-        <Typography variant="subtitle2">Search text</Typography>
-        <TextField value={text} onChange={(e) => setText(e.target.value)} autoFocus fullWidth helperText="Matches rows containing every word, in any column." />
-        <Toolbar variant="panelBar">
+        <Stack spacing={0.5}>
+          <InputLabel htmlFor="search-filter-text">Search text</InputLabel>
+          <TextField id="search-filter-text" size="small" value={text} onChange={(e) => setText(e.target.value)} autoFocus fullWidth helperText="Matches rows containing every word, in any column." />
+        </Stack>
+        <Box sx={BAR_SX}>
           <span />
-          <Button variant="text" onClick={onCancel}>
+          <Button variant="outlined" size="small" onClick={onCancel}>
             Cancel
           </Button>
-          <Button variant="contained" type="submit" disabled={!text.trim()}>
+          <Button variant="contained" size="small" type="submit" disabled={!text.trim()}>
             Save filter
           </Button>
-        </Toolbar>
+        </Box>
       </Stack>
-    </Paper>
+    </Box>
   )
 }

@@ -1,20 +1,24 @@
 "use client"
 
 import * as React from "react"
-import Chip from "@mui/material/Chip"
-import Divider from "@mui/material/Divider"
-import Stack from "@mui/material/Stack"
-import Tooltip from "@mui/material/Tooltip"
-import Typography from "@mui/material/Typography"
+import { Box, Tooltip } from "@mui/material"
 
-import { COLUMN_ICONS, SEARCH_ICON } from "@/lib/column-icons"
+import { FilterChipAndPopover } from "@/vivaa/staff/components/FiltersV2/components/ChipAndPopover"
 import { chipParts, filterSummary, type Filter } from "@/lib/filters"
 import { FilterEditor, type FilterDraft } from "./filter-editor"
-import { FilterPopover } from "./filter-popover"
+
+/** Widest the value excerpt may get before it ellipsizes (the spec's ~200px chip budget). */
+const VALUE_MAX_WIDTH = 200
 
 /**
- * Segmented filter chip: [icon type] | operator | value | and N more | ×.
- * Stock MUI Chip (variant "filter" in the theme); clicking it opens the editor.
+ * An applied filter: staff's `FilterChipAndPopover` (solid border, bold column label, the value in
+ * its blue box, ✕ to remove), opening the filter editor in the same popover.
+ *
+ * Additions on top of staff, none of which touch the synced component:
+ * - The value box carries the operator when it isn't plain "is" (e.g. "is not Failed",
+ *   "> 5m"), and "+ 2 more" for advanced filters.
+ * - Long values ellipsize at {@link VALUE_MAX_WIDTH} (staff's chip grows without limit).
+ * - A tooltip with the full criteria, hidden while the editor is open.
  */
 export function FilterChip({
   filter,
@@ -25,52 +29,57 @@ export function FilterChip({
   onChange: (draft: FilterDraft) => void
   onRemove: () => void
 }) {
-  const [anchor, setAnchor] = React.useState<HTMLElement | null>(null)
+  const [isOpen, setIsOpen] = React.useState(false)
+  const [isTooltipOpen, setIsTooltipOpen] = React.useState(false)
   const parts = chipParts(filter)
-  const Icon = filter.kind === "search" ? SEARCH_ICON : COLUMN_ICONS[filter.column]
-  const summary = [...filterSummary(filter), "Click to edit"].join("\n")
+  const summary = filterSummary(filter).join("\n")
 
   return (
-    <>
-      <Tooltip title={summary} placement="bottom">
-        <Chip
-          variant="filter"
-          icon={<Icon />}
-          aria-label={`${filterSummary(filter).join(" ")}. Click to edit`}
-          onClick={(e) => setAnchor(e.currentTarget)}
-          onDelete={onRemove}
-          label={
-            <Stack direction="row" spacing={1} divider={<Divider orientation="vertical" flexItem />}>
-              <Typography variant="subtitle2" noWrap>
-                {parts.label}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" noWrap>
-                {parts.operator}
-              </Typography>
-              {parts.value !== null ? (
-                <Typography variant="subtitle2" noWrap>
-                  {parts.value}
-                </Typography>
-              ) : null}
-              {parts.more ? (
-                <Typography variant="body2" color="text.secondary" noWrap>
-                  {parts.more}
-                </Typography>
-              ) : null}
-            </Stack>
+    <Tooltip
+      title={<Box sx={{ whiteSpace: "pre-line" }}>{summary}</Box>}
+      open={isTooltipOpen && !isOpen}
+      onOpen={() => setIsTooltipOpen(true)}
+      onClose={() => setIsTooltipOpen(false)}
+      placement="bottom-start"
+    >
+      <Box component="span" sx={{ display: "inline-flex", maxWidth: "100%" }}>
+        <FilterChipAndPopover
+          fieldLabel={parts.label}
+          selectedValue={
+            <Box
+              component="span"
+              sx={{
+                display: "inline-block",
+                maxWidth: VALUE_MAX_WIDTH,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                verticalAlign: "bottom",
+              }}
+            >
+              {chipValueText(filter, parts)}
+            </Box>
           }
-        />
-      </Tooltip>
-      <FilterPopover open={Boolean(anchor)} anchorEl={anchor} onClose={() => setAnchor(null)}>
-        <FilterEditor
-          initial={filter}
-          onCancel={() => setAnchor(null)}
-          onSubmit={(draft) => {
-            onChange(draft)
-            setAnchor(null)
-          }}
-        />
-      </FilterPopover>
-    </>
+          isOpen={isOpen}
+          setIsOpen={setIsOpen}
+          onDelete={onRemove}
+        >
+          <FilterEditor
+            initial={filter}
+            onCancel={() => setIsOpen(false)}
+            onSubmit={(draft) => {
+              onChange(draft)
+              setIsOpen(false)
+            }}
+          />
+        </FilterChipAndPopover>
+      </Box>
+    </Tooltip>
   )
+}
+
+/** "Completed, Failed" for plain equality (staff's own format); otherwise the operator leads. */
+function chipValueText(filter: Filter, parts: ReturnType<typeof chipParts>): string {
+  const plain = filter.kind === "search" || parts.operator === "is" || parts.operator === "is any of"
+  return [plain ? null : parts.operator, parts.value, parts.more].filter(Boolean).join(" ")
 }

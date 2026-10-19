@@ -1,61 +1,55 @@
 "use client"
 
 import * as React from "react"
-import IconButton from "@mui/material/IconButton"
-import Stack from "@mui/material/Stack"
-import TableCell from "@mui/material/TableCell"
-import TableSortLabel from "@mui/material/TableSortLabel"
-import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined"
+import { IconButton, Stack, Tooltip } from "@mui/material"
+import { gridClasses } from "@mui/x-data-grid"
+import { FunnelSimpleIcon } from "@phosphor-icons/react"
 
+import { colors } from "common"
 import type { ColumnDef } from "@/lib/data"
-import type { SortDir } from "@/lib/sort"
-import { FilterEditor, type FilterDraft } from "./filter-editor"
-import { FilterPopover } from "./filter-popover"
 
 /**
- * Header cell: TableSortLabel (click cycles ascending → descending → off) and a filter button.
- * The theme reveals the filter button on hover; a filtered column keeps it visible (color="primary").
+ * `renderHeader` content for a NotableDataGrid column: the title (with the grid's own
+ * `columnHeaderTitle` class, so NotableDataGrid's bold blue[5] header style applies unchanged) and
+ * a filter button. Sorting stays the grid's own: click the header, arrow on hover.
+ *
+ * The button is revealed on header hover or keyboard focus and stays visible (primary) while the
+ * column is filtered. Its click must not reach the header, which would sort.
  */
 export function ColumnHeader({
   column,
-  sortDir,
-  filtered,
-  onSort,
-  onAddFilter,
+  isFiltered,
+  onOpenFilter,
 }: {
   column: ColumnDef
-  sortDir?: SortDir
-  filtered: boolean
-  onSort: (dir: SortDir | null) => void
-  onAddFilter: (draft: FilterDraft) => void
+  isFiltered: boolean
+  onOpenFilter: (headerElement: Element) => void
 }) {
-  const [cell, setCell] = React.useState<HTMLTableCellElement | null>(null)
-  const [open, setOpen] = React.useState(false)
   return (
-    <TableCell ref={setCell} align={column.align ?? "left"} sortDirection={sortDir ?? false}>
-      <Stack direction="row" spacing={0.5}>
-        <TableSortLabel
-          active={Boolean(sortDir)}
-          direction={sortDir ?? "asc"}
-          onClick={() => onSort(!sortDir ? "asc" : sortDir === "asc" ? "desc" : null)}
-          title="Click to sort (ascending, descending, off)"
-        >
-          {column.label}
-        </TableSortLabel>
-        <IconButton aria-label={`Filter by ${column.label}`} color={filtered ? "primary" : "default"} onClick={() => setOpen(true)}>
-          <FilterAltOutlinedIcon />
-        </IconButton>
-      </Stack>
-      <FilterPopover open={open} anchorEl={cell} onClose={() => setOpen(false)}>
-        <FilterEditor
-          column={column.key}
-          onCancel={() => setOpen(false)}
-          onSubmit={(draft) => {
-            onAddFilter(draft)
-            setOpen(false)
+    <Stack direction="row" alignItems="center" gap={0.25} sx={{ minWidth: 0 }}>
+      <span className={gridClasses.columnHeaderTitle}>{column.label}</span>
+      <Tooltip title={`Filter by ${column.label}`}>
+        <IconButton
+          size="small"
+          aria-label={`Filter by ${column.label}`}
+          color={isFiltered ? "primary" : "default"}
+          onClick={(event) => {
+            event.stopPropagation()
+            const header = event.currentTarget.closest(`.${gridClasses.columnHeader}`)
+            onOpenFilter(header ?? event.currentTarget)
           }}
-        />
-      </FilterPopover>
-    </TableCell>
+          onKeyDown={(event) => event.stopPropagation()}
+          sx={{
+            padding: "4px",
+            opacity: isFiltered ? 1 : 0,
+            transition: "opacity .15s",
+            color: isFiltered ? undefined : colors.extended.gray["45"],
+            [`.${gridClasses.columnHeader}:hover &, &:focus-visible`]: { opacity: 1 },
+          }}
+        >
+          <FunnelSimpleIcon size={14} weight={isFiltered ? "bold" : "regular"} />
+        </IconButton>
+      </Tooltip>
+    </Stack>
   )
 }

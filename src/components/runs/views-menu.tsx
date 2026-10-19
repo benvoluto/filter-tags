@@ -1,22 +1,23 @@
 "use client"
 
 import * as React from "react"
-import Badge from "@mui/material/Badge"
-import Button from "@mui/material/Button"
-import ButtonGroup from "@mui/material/ButtonGroup"
-import Divider from "@mui/material/Divider"
-import InputAdornment from "@mui/material/InputAdornment"
-import ListItemIcon from "@mui/material/ListItemIcon"
-import ListItemText from "@mui/material/ListItemText"
-import ListSubheader from "@mui/material/ListSubheader"
-import Menu from "@mui/material/Menu"
-import MenuItem from "@mui/material/MenuItem"
-import TextField from "@mui/material/TextField"
-import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown"
-import CheckIcon from "@mui/icons-material/Check"
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined"
-import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined"
+import {
+  Badge,
+  Button,
+  ButtonGroup,
+  Divider,
+  InputAdornment,
+  ListItemIcon,
+  ListItemText,
+  ListSubheader,
+  Menu,
+  MenuItem,
+  TextField,
+} from "@mui/material"
+import { CaretDownIcon, CheckIcon, PencilSimpleIcon, StackIcon } from "@phosphor-icons/react"
 
+import { colors } from "common"
+import { FILTER_HEIGHT } from "@/vivaa/staff/components/FiltersV2/constants"
 import { sortSummary, viewFilterSummary, type SavedView } from "@/lib/views"
 
 /**
@@ -60,9 +61,9 @@ export function ViewsMenu({
 
   return (
     <>
-      <ButtonGroup ref={setGroup} variant="outlined" aria-label="Saved views">
+      <ButtonGroup ref={setGroup} variant="outlined" aria-label="Saved views" sx={{ height: FILTER_HEIGHT }}>
         <Button
-          startIcon={<LayersOutlinedIcon />}
+          startIcon={<StackIcon size={16} />}
           onClick={() => setOpen(true)}
           aria-haspopup="menu"
           aria-label={selected ? `View: ${selected.name}${edited ? " (edited)" : ""}` : "Views"}
@@ -73,15 +74,20 @@ export function ViewsMenu({
         </Button>
         {selected ? (
           <Button aria-label={`Rename ${selected.name}`} title="Rename view" onClick={() => setRenaming(true)}>
-            <EditOutlinedIcon fontSize="inherit" />
+            <PencilSimpleIcon size={14} />
           </Button>
         ) : null}
         <Button aria-label="Choose a view" aria-haspopup="menu" onClick={() => setOpen(true)}>
-          <ArrowDropDownIcon fontSize="small" />
+          <CaretDownIcon size={14} />
         </Button>
       </ButtonGroup>
 
-      <Menu anchorEl={group} open={open} onClose={() => setOpen(false)}>
+      <Menu
+        anchorEl={group}
+        open={open}
+        onClose={() => setOpen(false)}
+        slotProps={{ paper: { sx: { maxWidth: 360 } }, list: { sx: { "& .MuiMenuItem-root": { whiteSpace: "normal", alignItems: "flex-start" } } } }}
+      >
         <ListSubheader>Saved views</ListSubheader>
         {views.length === 0 ? (
           <MenuItem disabled>
@@ -90,8 +96,9 @@ export function ViewsMenu({
         ) : (
           views.map((v) => (
             <MenuItem key={v.id} selected={v.id === selectedId} onClick={() => pick(v)}>
-              <ListItemIcon>{v.id === selectedId ? <CheckIcon /> : null}</ListItemIcon>
+              <ListItemIcon>{v.id === selectedId ? <CheckIcon size={16} /> : null}</ListItemIcon>
               <ListItemText
+                slotProps={{ secondary: { sx: { whiteSpace: "pre-line" } } }}
                 primary={v.name}
                 secondary={`${viewFilterSummary(v)}\n${sortSummary(v.sort)}${v.matchMode === "any" ? " · match any filter" : ""}`}
               />
@@ -121,6 +128,7 @@ function RenameField({ initial, onDone }: { initial: string; onDone: (name: stri
   return (
     <TextField
       autoFocus
+      size="small"
       value={name}
       onChange={(e) => setName(e.target.value)}
       onFocus={(e) => e.currentTarget.select()}
@@ -139,7 +147,7 @@ function RenameField({ initial, onDone }: { initial: string; onDone: (name: stri
         input: {
           startAdornment: (
             <InputAdornment position="start">
-              <LayersOutlinedIcon />
+              <StackIcon size={16} color={colors.extended.gray["45"]} />
             </InputAdornment>
           ),
         },

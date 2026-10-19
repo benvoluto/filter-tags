@@ -1,34 +1,66 @@
 "use client"
 
 import * as React from "react"
-import Button from "@mui/material/Button"
-import AddIcon from "@mui/icons-material/Add"
 
-import { COLUMN_ICONS } from "@/lib/column-icons"
+import { FilterChipAndPopover } from "@/vivaa/staff/components/FiltersV2/components/ChipAndPopover"
 import { COLUMN_MAP, type ColumnKey } from "@/lib/data"
 import { FilterEditor, type FilterDraft } from "./filter-editor"
-import { FilterPopover } from "./filter-popover"
 
-/** A partial filter: column chosen, criteria pending. Dashed button (theme variant) + editor popover. */
+/**
+ * A partial filter (column chosen, criteria pending) is exactly staff's empty filter chip: dashed
+ * border, `+` icon, the column name. Staff's flow runs page shows "Run Status", "Version State"…
+ * this way before anything is applied.
+ */
 export function QuickFilter({ column, onAdd }: { column: ColumnKey; onAdd: (draft: FilterDraft) => void }) {
-  const [anchor, setAnchor] = React.useState<HTMLElement | null>(null)
-  const Icon = COLUMN_ICONS[column]
-  const label = COLUMN_MAP[column].label
+  const [isOpen, setIsOpen] = React.useState(false)
   return (
-    <>
-      <Button variant="dashed" startIcon={<AddIcon />} endIcon={<Icon />} aria-label={`Filter by ${label}`} onClick={(e) => setAnchor(e.currentTarget)}>
-        {label}
-      </Button>
-      <FilterPopover open={Boolean(anchor)} anchorEl={anchor} onClose={() => setAnchor(null)}>
-        <FilterEditor
-          column={column}
-          onCancel={() => setAnchor(null)}
-          onSubmit={(draft) => {
-            onAdd(draft)
-            setAnchor(null)
-          }}
-        />
-      </FilterPopover>
-    </>
+    <FilterChipAndPopover
+      fieldLabel={COLUMN_MAP[column].label}
+      selectedValue={undefined}
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+      onDelete={undefined}
+    >
+      <FilterEditor
+        column={column}
+        onCancel={() => setIsOpen(false)}
+        onSubmit={(draft) => {
+          onAdd(draft)
+          setIsOpen(false)
+        }}
+      />
+    </FilterChipAndPopover>
+  )
+}
+
+/**
+ * "Add filter": the same empty-state chip, opening the editor at the column picker. `isOpen` is
+ * lifted so the F shortcut can open it.
+ */
+export function AddFilter({
+  isOpen,
+  setIsOpen,
+  onAdd,
+}: {
+  isOpen: boolean
+  setIsOpen: (isOpen: boolean) => void
+  onAdd: (draft: FilterDraft) => void
+}) {
+  return (
+    <FilterChipAndPopover
+      fieldLabel="Add filter"
+      selectedValue={undefined}
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+      onDelete={undefined}
+    >
+      <FilterEditor
+        onCancel={() => setIsOpen(false)}
+        onSubmit={(draft) => {
+          onAdd(draft)
+          setIsOpen(false)
+        }}
+      />
+    </FilterChipAndPopover>
   )
 }

@@ -1,76 +1,68 @@
 "use client"
 
 import * as React from "react"
-import Button from "@mui/material/Button"
-import IconButton from "@mui/material/IconButton"
-import InputAdornment from "@mui/material/InputAdornment"
-import TextField from "@mui/material/TextField"
-import BookmarkAddOutlinedIcon from "@mui/icons-material/BookmarkAddOutlined"
-import ClearIcon from "@mui/icons-material/Clear"
-import SearchIcon from "@mui/icons-material/Search"
+import { Button, IconButton, Stack, Tooltip } from "@mui/material"
+import { BookmarkSimpleIcon, XIcon } from "@phosphor-icons/react"
+
+import { colors } from "common"
+import { TextSearch, type TextSearchHandle } from "@/vivaa/staff/components/FiltersV2/TextSearch"
+import { FILTER_HEIGHT } from "@/vivaa/staff/components/FiltersV2/constants"
+
+export const SEARCH_PLACEHOLDER = "Search or prompt to sort and filter"
 
 /**
- * Search field (stock TextField; width and pill shape come from the theme's `type="search"` variant).
- * It grows to up to four lines while focused. Clear and "Save as filter" appear once there's text.
+ * Staff's `TextSearch`, unmodified: 32px pill, magnifying glass, 250ms debounce, Enter applies
+ * immediately (and, as in staff, it takes focus on load). The prototype's additions sit beside it
+ * once there is a query: clear, and "Save as filter", which turns the search into a chip.
  */
 export function SearchBox({
   value,
   onChange,
   resultCount,
   onSaveAsFilter,
-  inputRef,
+  ref,
 }: {
   value: string
-  onChange: (v: string) => void
+  onChange: (value: string) => void
   resultCount: number
   onSaveAsFilter: () => void
-  inputRef?: React.Ref<HTMLTextAreaElement>
+  ref?: React.Ref<TextSearchHandle>
 }) {
-  const [focused, setFocused] = React.useState(false)
   const hasValue = value.trim() !== ""
   return (
-    <TextField
-      type="search"
-      multiline
-      maxRows={focused ? 4 : 1}
-      value={value}
-      placeholder="Search or prompt to sort and filter"
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault()
-          if (e.metaKey || e.ctrlKey) onSaveAsFilter()
-        }
-        if (e.key === "Escape") {
-          if (hasValue) onChange("")
-          else (e.target as HTMLElement).blur()
-        }
-      }}
-      inputRef={inputRef}
-      slotProps={{
-        htmlInput: { "aria-label": "Search or prompt to sort and filter" },
-        input: {
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
-          endAdornment: hasValue ? (
-            <InputAdornment position="end">
-              <IconButton aria-label="Clear search" onClick={() => onChange("")}>
-                <ClearIcon />
-              </IconButton>
-              {resultCount > 0 ? (
-                <Button variant="outlined" startIcon={<BookmarkAddOutlinedIcon />} onClick={onSaveAsFilter} title="Save as filter (⌘↵)">
-                  Save as filter
-                </Button>
-              ) : null}
-            </InputAdornment>
-          ) : undefined,
-        },
-      }}
-    />
+    <Stack direction="row" alignItems="center" gap={0.5}>
+      <TextSearch
+        ref={ref}
+        initialValue={value}
+        setValue={(next) => onChange(next ?? "")}
+        placeholder={SEARCH_PLACEHOLDER}
+        width={280}
+      />
+      {hasValue && (
+        <Tooltip title="Clear search">
+          <IconButton
+            size="small"
+            aria-label="Clear search"
+            onClick={() => {
+              if (ref && typeof ref === "object") ref.current?.clear()
+              else onChange("")
+            }}
+          >
+            <XIcon size={16} color={colors.extended.gray["45"]} />
+          </IconButton>
+        </Tooltip>
+      )}
+      {hasValue && resultCount > 0 && (
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<BookmarkSimpleIcon size={16} />}
+          onClick={onSaveAsFilter}
+          sx={{ height: FILTER_HEIGHT, whiteSpace: "nowrap" }}
+        >
+          Save as filter
+        </Button>
+      )}
+    </Stack>
   )
 }

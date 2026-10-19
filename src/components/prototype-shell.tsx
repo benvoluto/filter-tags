@@ -1,13 +1,9 @@
 "use client"
 
 import * as React from "react"
-import Container from "@mui/material/Container"
-import Divider from "@mui/material/Divider"
-import Stack from "@mui/material/Stack"
-import ToggleButton from "@mui/material/ToggleButton"
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup"
-import Typography from "@mui/material/Typography"
+import { Box, Stack, ToggleButton, ToggleButtonGroup } from "@mui/material"
 
+import { Text, colors } from "common"
 import { RunsTable, type PrototypeVariant } from "@/components/runs/runs-table"
 
 const VARIANTS: { value: PrototypeVariant; label: string }[] = [
@@ -16,27 +12,44 @@ const VARIANTS: { value: PrototypeVariant; label: string }[] = [
   { value: "views", label: "Filters and views" },
 ]
 
-/** Page chrome with a selector to switch between prototype variants. */
+/**
+ * Page chrome laid out like a staff page: an action bar (title at heading3/bold, one rule under it)
+ * over a body with the standard 24px padding (web/common Layout: STANDARD_LAYOUT_PADDING_X = 3).
+ * The variant switch is prototype scaffolding, drawn with staff's themed ToggleButtonGroup.
+ */
 export function PrototypeShell() {
   const [variant, setVariant] = React.useState<PrototypeVariant>("filters")
   return (
-    <main>
-      <Container maxWidth={false}>
-        <Stack direction="row" spacing={2} useFlexGap component="header">
-          <Typography variant="h1">Flow Runs</Typography>
-          <ToggleButtonGroup exclusive value={variant} onChange={(_, v) => v && setVariant(v)} aria-label="Prototype variant">
-            {VARIANTS.map((v) => (
-              <ToggleButton key={v.value} value={v.value}>
-                {v.label}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Stack>
-      </Container>
-      <Divider />
-      <Container maxWidth={false}>
+    <Box component="main">
+      <Stack
+        component="header"
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        flexWrap="wrap"
+        gap={2}
+        sx={{ paddingX: 3, paddingY: 1.5, borderBottom: `1px solid ${colors.border.light}` }}
+      >
+        <Text variant="heading3" bold>
+          Flow Runs
+        </Text>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={variant}
+          onChange={(_, next: PrototypeVariant | null) => next && setVariant(next)}
+          aria-label="Prototype variant"
+        >
+          {VARIANTS.map((v) => (
+            <ToggleButton key={v.value} value={v.value} sx={{ fontSize: "0.875rem", paddingX: 1.5 }}>
+              {v.label}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+      </Stack>
+      <Box sx={{ paddingX: 3, paddingY: 2 }}>
         <RunsTable variant={variant} />
-      </Container>
-    </main>
+      </Box>
+    </Box>
   )
 }

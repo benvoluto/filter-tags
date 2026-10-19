@@ -1,3 +1,7 @@
+> **Current implementation (branch `staff-parity`):** built on the vivaa staff app's own theme and
+> components, not shadcn — see `STAFF_PARITY.md`. The brief below is the original interaction spec;
+> its styling instructions (shadcn / Claymorphism) are superseded.
+
 THis repo is a prototype interface for filters that would work with a table of data in column format, where the data is paginated, can be sorted by any column, can be searched through with a search input, and be filtered by criteria entered that filters on multiple columns, each filter handling a single or multiple criteria as well as search results. 
 Please use shad-cn as the basis for the design components and styles (like a chip, table, button, etc.), with the Claymorphism theme available from https://tweakcn.com/.
 Please create a table with sample data for 50 rows and 12 columns with pagination controls for 3 pages at bottom.

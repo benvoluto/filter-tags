@@ -1,36 +1,40 @@
-import type SvgIcon from "@mui/material/SvgIcon"
-import AccountTreeOutlined from "@mui/icons-material/AccountTreeOutlined"
-import BoltOutlined from "@mui/icons-material/BoltOutlined"
-import BusinessOutlined from "@mui/icons-material/BusinessOutlined"
-import CalendarTodayOutlined from "@mui/icons-material/CalendarTodayOutlined"
-import LayersOutlined from "@mui/icons-material/LayersOutlined"
-import Numbers from "@mui/icons-material/Numbers"
-import PersonOutlineOutlined from "@mui/icons-material/PersonOutlineOutlined"
-import RadioButtonCheckedOutlined from "@mui/icons-material/RadioButtonCheckedOutlined"
-import Search from "@mui/icons-material/Search"
-import SpeedOutlined from "@mui/icons-material/SpeedOutlined"
-import StorageOutlined from "@mui/icons-material/StorageOutlined"
-import TimerOutlined from "@mui/icons-material/TimerOutlined"
-import WarningAmberOutlined from "@mui/icons-material/WarningAmberOutlined"
+import {
+  BuildingsIcon,
+  CalendarBlankIcon,
+  CircleHalfIcon,
+  DatabaseIcon,
+  FlowArrowIcon,
+  GaugeIcon,
+  HashIcon,
+  type Icon,
+  LightningIcon,
+  MagnifyingGlassIcon,
+  StackIcon,
+  TimerIcon,
+  UserIcon,
+  WarningIcon,
+} from "@phosphor-icons/react"
 
 import type { ColumnKey } from "./data"
 
-type SvgIconComponent = typeof SvgIcon
-
-/** One Material icon per filterable column, used by filter chips, partial filters, and the type picker. */
-export const COLUMN_ICONS: Record<ColumnKey, SvgIconComponent> = {
-  runId: Numbers,
-  flow: AccountTreeOutlined,
-  customer: BusinessOutlined,
-  status: RadioButtonCheckedOutlined,
-  trigger: BoltOutlined,
-  ehr: StorageOutlined,
-  started: CalendarTodayOutlined,
-  duration: TimerOutlined,
-  records: LayersOutlined,
-  automationRate: SpeedOutlined,
-  errors: WarningAmberOutlined,
-  owner: PersonOutlineOutlined,
+/**
+ * One Phosphor icon per filterable column (the staff app's icon set; names carry the `Icon` suffix
+ * its eslint rule requires). Used inside the filter editor only — staff filter chips carry no
+ * column icon.
+ */
+export const COLUMN_ICONS: Record<ColumnKey, Icon> = {
+  runId: HashIcon,
+  flow: FlowArrowIcon,
+  customer: BuildingsIcon,
+  status: CircleHalfIcon,
+  trigger: LightningIcon,
+  ehr: DatabaseIcon,
+  started: CalendarBlankIcon,
+  duration: TimerIcon,
+  records: StackIcon,
+  automationRate: GaugeIcon,
+  errors: WarningIcon,
+  owner: UserIcon,
 }
 
-export const SEARCH_ICON: SvgIconComponent = Search
+export const SEARCH_ICON: Icon = MagnifyingGlassIcon

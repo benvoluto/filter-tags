@@ -1,5 +1,5 @@
-import { PrototypeShell } from "@/components/prototype-shell"
+import { ClientOnlyShell } from "@/components/client-only-shell"
 
 export default function Home() {
-  return <PrototypeShell />
+  return <ClientOnlyShell />
 }

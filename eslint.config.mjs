@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Code synced or adapted from VivaaHealth/vivaa. It is linted upstream under vivaa's own config;
+    // editing it here to satisfy this repo's rules would break the byte-for-byte sync.
+    "src/vivaa/**",
   ]),
 ]);
 

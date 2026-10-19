@@ -1,0 +1,40 @@
+/*
+ * Provenance: VivaaHealth/vivaa @ a1af829f5756
+ * Source:     web/common/src/styles/fonts.css
+ * URL:        https://github.com/VivaaHealth/vivaa/blob/a1af829f5756ecd44d1ab31c7ac9393d2a2bf532/web/common/src/styles/fonts.css
+ * Ref:        main (upstream commit 2026-07-23)
+ * Fetched:    2026-10-19  (via scripts/sync-from-vivaa.mjs)
+ * Note:       Staff loads Inter Regular, SemiBold and Italic only, so `bold` (700) renders as SemiBold.
+ * DO NOT EDIT — run `pnpm sync:vivaa` to refresh.
+*/
+
+@font-face {
+  font-family: Inter;
+  src:
+    url('./fonts/Inter-Regular.woff2') format('woff2'),
+    url('./fonts/Inter-Regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: Inter;
+  src:
+    url('./fonts/Inter-SemiBold.woff2') format('woff2'),
+    url('./fonts/Inter-SemiBold.woff') format('woff');
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: Inter;
+  src:
+    url('./fonts/Inter-Italic.woff2') format('woff2'),
+    url('./fonts/Inter-Italic.woff') format('woff');
+  font-weight: normal;
+  font-style: italic;
+}
+
+:root {
+  font-family: Inter, sans-serif;
+}

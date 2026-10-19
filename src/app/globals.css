@@ -1,0 +1,28 @@
+/*
+ * Page-level rules the staff app applies outside MUI, so this prototype renders on the same ground.
+ *
+ * 1. web/staff/src/index.css — the body rules, verbatim.
+ * 2. The two pieces of Bootstrap 5's reboot (staff imports bootstrap.css globally) that MUI components
+ *    visibly depend on: border-box sizing and the body's line height. The rest of Bootstrap is not
+ *    loaded; every element on this page is a MUI component that sets its own margins and type.
+ * The Inter faces come from web/common/src/styles/fonts.css (synced), imported in app/layout.tsx.
+ */
+
+/* 2. Bootstrap reboot (subset) */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  line-height: 1.5;
+}
+
+/* 1. web/staff/src/index.css */
+body {
+  font-family: Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+}
