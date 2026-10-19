@@ -8,12 +8,17 @@ import { FILTER_HEIGHT } from "@/vivaa/staff/components/FiltersV2/constants"
 /** One-line list rows at the panel's 14px (staff's small-field size). */
 export const OPTION_TEXT = { variant: "body2" as const, noWrap: true }
 
-/** Scrolling value/column lists bleed to the popover edges, ruled top and bottom. */
+/**
+ * Scrolling value/column lists bleed to the popover's edges (-16px, its padding), ruled top and
+ * bottom, so rows highlight edge to edge like a menu. `&&` because the lists sit in a MUI Stack,
+ * whose spacing rule (`> :not(style) ~ :not(style) { margin: 0 }`) otherwise wins and leaves the
+ * list inset — which is what pushed the rows in.
+ */
 export const LIST_SX: SxProps<Theme> = {
   maxHeight: 260,
   minHeight: 0,
   overflowY: "auto",
-  marginX: -2,
+  "&&": { marginLeft: -2, marginRight: -2 },
   paddingY: 0.5,
   borderTop: `1px solid ${colors.border.light}`,
   borderBottom: `1px solid ${colors.border.light}`,
@@ -40,3 +45,9 @@ export const FIELD_SX: SxProps<Theme> = {
   "&& .MuiInputBase-input": { paddingTop: 0, paddingBottom: 0, height: "20px", lineHeight: "20px" },
   "&& .MuiSelect-select": { paddingTop: 0, paddingBottom: 0, minHeight: 0, lineHeight: "20px" },
 }
+
+/**
+ * Left padding for list rows that start with a checkbox or radio, so the box itself (not its 4px
+ * touch padding and 2.5px icon inset) lines up with the field and label above (16px from the edge).
+ */
+export const CHECK_ROW_PADDING_LEFT = "10px"

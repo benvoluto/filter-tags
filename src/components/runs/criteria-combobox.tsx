@@ -4,7 +4,7 @@ import * as React from "react"
 import {
   Box,
   Checkbox,
-  Chip,
+  Divider,
   InputAdornment,
   ListItemIcon,
   ListItemText,
@@ -13,11 +13,11 @@ import {
   Stack,
   TextField,
 } from "@mui/material"
-import { MagnifyingGlassIcon, PlusIcon, XIcon } from "@phosphor-icons/react"
+import { MagnifyingGlassIcon, PlusIcon } from "@phosphor-icons/react"
 
 import { Text, colors } from "common"
 import { COLUMN_MAP, distinctValues, formatCriterion, type ColumnKey } from "@/lib/data"
-import { FIELD_SX, LIST_SX, NO_ROWS, OPTION_TEXT } from "./panel-styles"
+import { CHECK_ROW_PADDING_LEFT, FIELD_SX, LIST_SX, NO_ROWS, OPTION_TEXT } from "./panel-styles"
 
 /** Trailing "0 rows" on a value that would empty the table (the row's tooltip says why). */
 export function NoRowsHint() {
@@ -64,19 +64,26 @@ export function withTypedValues(values: string[], typed: string, column: ColumnK
   return addValues(values, typedValues(column, typed), single)
 }
 
-type Item = { kind: "custom"; value: string } | { kind: "option"; value: string }
+/**
+ * A row in the list: a value (the column's own, or one you added that isn't in it — `own`), or the
+ * "Use “…”" row that adds the text being typed.
+ */
+type Item = { kind: "value"; value: string; own: boolean } | { kind: "use"; value: string }
 
 /**
  * The criteria step's combo box: type values, pick them from the column's list, or both, in any
  * order. The list is inline in the panel (not a dropdown), so it never covers the panel's buttons.
  *
- * - Typed text is criteria. A comma turns what's before it into a value chip ("Epic, Cerner");
- *   the text after the last comma filters the list. Enter adds the filter with the typed entry as
- *   typed (an exact match maps to the column's value). A "Use “…”" row adds it as a chip.
- * - ↑ ↓ highlight a value; Space adds it and clears the text. Without arrowing, Space just types a
- *   space. After arrowing, Enter adds the highlighted value and the filter.
- * - "is any of": values show as chips (✕, or Backspace in an empty field, removes the last).
- *   "equals" (`single`): one value, shown by its radio; a new one replaces it.
+ * - Typed text is criteria. A comma adds what's before it ("Epic, Cerner"); the text after the
+ *   last comma filters the list. Enter adds the filter with the typed entry as typed (an exact
+ *   match maps to the column's value). The "Use “…”" row (last) adds the typed text.
+ * - What's picked is shown by the list itself (checkboxes; radios for "equals"). Values you added
+ *   that aren't in the column's list sit at the top, checked, above a subtle divider; unchecking
+ *   one removes it.
+ * - ↑ ↓ move a cursor; Space adds the value under it and clears the text, and the cursor stays on
+ *   that value. Without arrowing, Space just types a space. After arrowing, Enter adds the value
+ *   under the cursor and the filter.
+ * - "equals" (`single`): one value; a new one replaces it.
  * - Clicking a value adds it and clears the text (the text was the search).
  * - ← at the start of the field, or Shift+Tab, goes back to the type step (`onBack`, when there is
  *   one — i.e. opened from Add filter).
@@ -125,15 +132,24 @@ export function CriteriaCombobox({
   // The list filters on the value being typed: the text after the last comma.
   const segment = typed.slice(typed.lastIndexOf(",") + 1).trim()
   const q = segment.toLowerCase()
-  const matches = q
-    ? options.filter((o) => o.toLowerCase().includes(q) || formatCriterion(col, o).toLowerCase().includes(q))
-    : options
-  const exact = options.some((o) => o.toLowerCase() === q || formatCriterion(col, o).toLowerCase() === q)
-  // Matches first, so ↓ reaches the column's values; "Use “…”" (the typed text) is the last row.
-  const items: Item[] = [
-    ...matches.map((value): Item => ({ kind: "option", value })),
-    ...(segment && !exact && !lower.includes(q) ? [{ kind: "custom" as const, value: segment }] : []),
-  ]
+
+  /** The rows for these picked values and search text: own values, the column's values, "Use". */
+  const buildItems = (picked: string[], query: string): Item[] => {
+    const matchesQuery = (v: string) =>
+      !query || v.toLowerCase().includes(query) || formatCriterion(col, v).toLowerCase().includes(query)
+    const isOption = (v: string) => options.some((o) => o.toLowerCase() === v.toLowerCase())
+    const own = picked.filter((v) => !isOption(v) && matchesQuery(v))
+    const exact = options.some((o) => o.toLowerCase() === query || formatCriterion(col, o).toLowerCase() === query)
+    const alreadyPicked = picked.some((v) => v.toLowerCase() === query)
+    return [
+      ...own.map((value): Item => ({ kind: "value", value, own: true })),
+      ...options.filter(matchesQuery).map((value): Item => ({ kind: "value", value, own: false })),
+      ...(query && !exact && !alreadyPicked ? [{ kind: "use" as const, value: segment }] : []),
+    ]
+  }
+  const items = buildItems(values, q)
+  /** Rows above the divider (your own values). */
+  const ownCount = items.filter((it) => it.kind === "value" && it.own).length
   const active = Math.min(highlight, items.length - 1)
 
   React.useEffect(() => {
@@ -144,19 +160,20 @@ export function CriteriaCombobox({
    * Add (or, in the list, toggle off) a value and clear the typed text. Returns the new values.
    * The cursor stays on the picked value, so you can keep arrowing and picking where you were.
    * Clearing the text unfilters the list, so the cursor follows the value to its row in the full
-   * list (the "Use “…”" row goes away; its value becomes a chip, and the cursor resets).
+   * list (an added value moves to the top). If the row goes away — you unchecked one of your own
+   * values — the cursor stays at the same place in the list.
    */
   const pick = (value: string, toggle: boolean): string[] => {
     const isPicked = lower.includes(value.toLowerCase())
     const next = toggle && isPicked && !single ? values.filter((v) => v.toLowerCase() !== value.toLowerCase()) : addValues(values, [value], single)
     onChange(next)
     onTypedChange("")
-    const row = options.findIndex((o) => o.toLowerCase() === value.toLowerCase())
-    if (row >= 0 && navigated) {
-      setHighlight(row)
+    if (navigated) {
+      const after = buildItems(next, "")
+      const row = after.findIndex((it) => it.kind === "value" && it.value.toLowerCase() === value.toLowerCase())
+      setHighlight(row >= 0 ? row : Math.max(0, Math.min(active, after.length - 1)))
     } else {
       setHighlight(0)
-      setNavigated(false)
     }
     return next
   }
@@ -210,10 +227,6 @@ export function CriteriaCombobox({
         return
       }
     }
-    if (e.key === "Backspace" && typed === "" && values.length && !single) {
-      onChange(values.slice(0, -1))
-      return
-    }
     if (e.key === "Enter") {
       // Handled here, not by the panel's form, so the typed entry is part of the filter.
       e.preventDefault()
@@ -228,20 +241,6 @@ export function CriteriaCombobox({
 
   return (
     <Stack spacing={1} sx={{ minHeight: 0 }}>
-      {!single && values.length > 0 && (
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, maxHeight: 72, overflowY: "auto", flexShrink: 0 }}>
-          {values.map((v) => (
-            <Chip
-              key={v}
-              size="small"
-              label={formatCriterion(col, v)}
-              onDelete={() => onChange(values.filter((x) => x !== v))}
-              deleteIcon={<XIcon size={12} aria-label={`Remove ${formatCriterion(col, v)}`} />}
-              sx={{ maxWidth: "100%" }}
-            />
-          ))}
-        </Box>
-      )}
       <TextField
         size="small"
         fullWidth
@@ -274,7 +273,9 @@ export function CriteriaCombobox({
         role="listbox"
         aria-label={`${col.label} values`}
         aria-multiselectable={!single}
-        sx={{ ...LIST_SX, margin: 0, marginX: -2, listStyle: "none" } as object}
+        // A bare <ul> carries the browser's 40px left padding; zero it so rows start at the box edge
+        // like the type step's MenuList (LIST_SX keeps the vertical padding and the edge bleed).
+        sx={[LIST_SX, { listStyle: "none", paddingLeft: 0, paddingRight: 0 }] as never}
       >
         {items.length === 0 && (
           <MenuItem dense disabled component="li">
@@ -283,6 +284,11 @@ export function CriteriaCombobox({
         )}
         {items.map((item, i) => {
           const id = `${listId}-${i}`
+          // A subtle rule between your own values (top) and the column's values.
+          const divider =
+            i === ownCount && ownCount > 0 ? (
+              <Divider key="own-divider" component="li" role="separator" sx={{ marginY: 0.5, borderColor: colors.border.light }} />
+            ) : null
           const ref = (el: HTMLLIElement | null) => {
             itemRefs.current[i] = el
           }
@@ -304,33 +310,45 @@ export function CriteriaCombobox({
             },
             onClick: () => pick(item.value, true),
           }
-          if (item.kind === "custom") {
+          if (item.kind === "use") {
             return (
-              <MenuItem key={`custom:${item.value}`} {...common} role="option" aria-selected={false}>
-                <ListItemIcon>
-                  <PlusIcon size={16} />
-                </ListItemIcon>
-                <ListItemText primary={`Use “${item.value}”`} slotProps={{ primary: OPTION_TEXT }} />
-              </MenuItem>
+              <React.Fragment key={`use:${item.value}`}>
+                {divider}
+                <MenuItem {...common} role="option" aria-selected={false}>
+                  <ListItemIcon>
+                    <PlusIcon size={16} />
+                  </ListItemIcon>
+                  <ListItemText primary={`Use “${item.value}”`} slotProps={{ primary: OPTION_TEXT }} />
+                </MenuItem>
+              </React.Fragment>
             )
           }
           const checked = lower.includes(item.value.toLowerCase())
-          const empty = returnsNoRows?.(item.value) ?? false
+          const empty = !item.own && (returnsNoRows?.(item.value) ?? false)
           return (
-            <MenuItem key={item.value} {...common} role="option" aria-selected={checked} title={empty ? NO_ROWS : undefined}>
-              <ListItemIcon>
-                {single ? (
-                  <Radio size="small" checked={checked} tabIndex={-1} />
-                ) : (
-                  <Checkbox size="small" checked={checked} tabIndex={-1} />
-                )}
-              </ListItemIcon>
-              <ListItemText
-                primary={formatCriterion(col, item.value)}
-                slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }}
-              />
-              {empty ? <NoRowsHint /> : null}
-            </MenuItem>
+            <React.Fragment key={`${item.own ? "own" : "value"}:${item.value}`}>
+              {divider}
+              <MenuItem
+                {...common}
+                role="option"
+                aria-selected={checked}
+                title={empty ? NO_ROWS : undefined}
+                sx={{ paddingLeft: CHECK_ROW_PADDING_LEFT }}
+              >
+                <ListItemIcon>
+                  {single ? (
+                    <Radio size="small" checked={checked} tabIndex={-1} />
+                  ) : (
+                    <Checkbox size="small" checked={checked} tabIndex={-1} />
+                  )}
+                </ListItemIcon>
+                <ListItemText
+                  primary={formatCriterion(col, item.value)}
+                  slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }}
+                />
+                {empty ? <NoRowsHint /> : null}
+              </MenuItem>
+            </React.Fragment>
           )
         })}
       </Box>
