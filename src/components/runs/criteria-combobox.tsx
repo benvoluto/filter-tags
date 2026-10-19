@@ -78,6 +78,7 @@ type Item = { kind: "value"; value: string; own: boolean } | { kind: "use"; valu
  * - Clicking a value adds it and clears the text (the text was the search).
  * - ← at the start of the field, or Shift+Tab, goes back to the type step (`onBack`, when there is
  *   one — i.e. opened from Add filter).
+ * - Operator symbols at the start (> < >= <= = !=) switch the operator (`onOperatorText`).
  */
 export function CriteriaCombobox({
   single = false,
@@ -88,6 +89,7 @@ export function CriteriaCombobox({
   onTypedChange,
   onCommit,
   onBack,
+  onOperatorText,
   returnsNoRows,
 }: {
   single?: boolean
@@ -101,6 +103,8 @@ export function CriteriaCombobox({
   onCommit: (values: string[]) => void
   /** Return to the type (column) step. Omitted when the column was fixed by the entry point. */
   onBack?: () => void
+  /** Typed operator symbols (> < >= <= = !=) switch the operator; true when the text was one. */
+  onOperatorText?: (text: string) => boolean
   returnsNoRows?: (value: string) => boolean
 }) {
   const col = COLUMN_MAP[column]
@@ -114,7 +118,14 @@ export function CriteriaCombobox({
   // Focus the field once the popover has opened. `autoFocus` alone loses: MUI's popover focus trap
   // moves focus to its paper after the content mounts.
   React.useEffect(() => {
-    const frame = requestAnimationFrame(() => inputRef.current?.focus())
+    // Caret at the end: the field can appear mid-typing, when a typed "!=" or "=" switched the
+    // operator and carried the rest of the text over.
+    const frame = requestAnimationFrame(() => {
+      const input = inputRef.current
+      if (!input) return
+      input.focus()
+      input.setSelectionRange(input.value.length, input.value.length)
+    })
     return () => cancelAnimationFrame(frame)
   }, [])
 
@@ -172,6 +183,7 @@ export function CriteriaCombobox({
   const onTextChange = (text: string) => {
     setNavigated(false)
     setHighlight(0)
+    if (onOperatorText?.(text)) return
     // A comma completes the values before it (typed or pasted); the rest stays in the field.
     const lastComma = text.lastIndexOf(",")
     if (lastComma >= 0) {

@@ -17,7 +17,9 @@ export type Comparator =
   | "contains"
   | "not_contains"
   | "gt"
+  | "gte"
   | "lt"
+  | "lte"
   | "between"
   | "is_empty"
   | "is_not_empty"
@@ -70,7 +72,9 @@ export const COMPARATORS: { value: Comparator; label: string; short: string; ari
   { value: "contains", label: "contains", short: "contains", arity: "multi" },
   { value: "not_contains", label: "does not contain", short: "excludes", arity: "multi" },
   { value: "gt", label: "greater than", short: ">", arity: "one" },
+  { value: "gte", label: "greater than or equal to", short: "≥", arity: "one" },
   { value: "lt", label: "less than", short: "<", arity: "one" },
+  { value: "lte", label: "less than or equal to", short: "≤", arity: "one" },
   { value: "between", label: "between", short: "between", arity: "two" },
   { value: "is_empty", label: "is empty", short: "is empty", arity: "none" },
   { value: "is_not_empty", label: "is not null", short: "is not empty", arity: "none" },
@@ -87,7 +91,7 @@ export function isOrderable(col: ColumnDef) {
 
 export function comparatorsFor(col: ColumnDef) {
   return COMPARATORS.filter((c) => {
-    if (c.value === "gt" || c.value === "lt" || c.value === "between") return isOrderable(col)
+    if (c.value === "gt" || c.value === "gte" || c.value === "lt" || c.value === "lte" || c.value === "between") return isOrderable(col)
     if (c.value === "contains" || c.value === "not_contains") return !isOrderable(col)
     return true
   })
@@ -123,13 +127,19 @@ export function matchCondition(row: RunRow, cond: Condition): boolean {
       return !values.some((v) => text.includes(v))
     }
     case "gt":
+    case "gte":
     case "lt":
+    case "lte":
     case "between": {
       if (isEmptyValue(raw)) return false
       const n = toComparable(col, String(raw))
       const [a, b] = cond.values.map((v) => toComparable(col, v))
+      // Dates compare by day: ≤ a date includes that whole day.
+      const endOfA = col.type === "date" && !Number.isNaN(a) ? a + 86_400_000 - 1 : a
       if (cond.comparator === "gt") return Number.isNaN(a) || n > a
+      if (cond.comparator === "gte") return Number.isNaN(a) || n >= a
       if (cond.comparator === "lt") return Number.isNaN(a) || n < a
+      if (cond.comparator === "lte") return Number.isNaN(a) || n <= endOfA
       // Dates compare by day, so make the upper bound inclusive of the whole day.
       const upper = col.type === "date" && !Number.isNaN(b) ? b + 86_400_000 - 1 : b
       return (Number.isNaN(a) || n >= a) && (Number.isNaN(upper) || n <= upper)
@@ -207,8 +217,12 @@ function operatorPhrase(c: Condition): string {
       return "excludes"
     case "gt":
       return col.type === "date" ? "after" : "greater than"
+    case "gte":
+      return col.type === "date" ? "on or after" : "at least"
     case "lt":
       return col.type === "date" ? "before" : "less than"
+    case "lte":
+      return col.type === "date" ? "on or before" : "at most"
     case "between":
       return "between"
     case "is_empty":
@@ -272,4 +286,40 @@ let counter = 0
 export function newFilterId() {
   counter += 1
   return `f${Date.now().toString(36)}${counter}`
+}
+
+/**
+ * Operator symbols typed at the start of a basic filter's criteria field. Longest first, so "<="
+ * wins over "<". `"!"` alone is not an operator: it waits for "=".
+ */
+const OPERATOR_SYMBOLS: [string, Comparator][] = [
+  ["<=", "lte"],
+  [">=", "gte"],
+  ["!=", "is_not"],
+  ["<", "lt"],
+  [">", "gt"],
+  ["=", "equals"],
+]
+
+/**
+ * If `text` starts with an operator symbol the column supports, the operator it means and the text
+ * after it (the value). Because the symbols are typed one key at a time, "=" right after a "<" or
+ * ">" that was already applied upgrades it to "≤" / "≥". Returns null when there's no symbol (or the
+ * column can't use it — e.g. ">" on a text column stays literal text).
+ */
+export function parseOperatorPrefix(
+  text: string,
+  col: ColumnDef,
+  current: Comparator
+): { comparator: Comparator; rest: string } | null {
+  const t = text.trimStart()
+  const allowed = new Set(comparatorsFor(col).map((c) => c.value))
+  if ((current === "gt" || current === "lt") && t.startsWith("=") && !t.startsWith("==")) {
+    const upgraded: Comparator = current === "gt" ? "gte" : "lte"
+    if (allowed.has(upgraded)) return { comparator: upgraded, rest: t.slice(1).trimStart() }
+  }
+  for (const [symbol, comparator] of OPERATOR_SYMBOLS) {
+    if (t.startsWith(symbol)) return allowed.has(comparator) ? { comparator, rest: t.slice(symbol.length).trimStart() } : null
+  }
+  return null
 }
