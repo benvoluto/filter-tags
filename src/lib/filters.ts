@@ -194,10 +194,11 @@ function operatorPhrase(c: Condition): string {
   const col = COLUMN_MAP[c.column]
   const many = c.values.length > 1
   switch (c.comparator) {
+    // The two list operators read as chosen in the panel, so "is any of" with one value still says so.
     case "is":
-      return many ? "is any of" : "is"
+      return "is any of"
     case "equals":
-      return "is"
+      return "equals"
     case "is_not":
       return many ? "is none of" : "is not"
     case "contains":

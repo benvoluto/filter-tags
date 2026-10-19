@@ -50,7 +50,7 @@ exists:
 
 | Redesign control | Built on |
 |---|---|
-| Applied filter chip | `FilterChipAndPopover`, unmodified. The value box carries the operator when it isn't plain *is* ("is not Failed", "greater than 5m"), ellipsizes at 200px, and a tooltip shows the full criteria. |
+| Applied filter chip | `FilterChipAndPopover`, unmodified: bold column, then the operator in regular weight and secondary ink ("is any of", "equals", "is not", "greater than"…), then the value in its blue box (ellipsized at 200px; "+ 2 more" for advanced filters). Operators with no value ("is empty") go in the box so the chip still reads as applied. A tooltip shows the full criteria. |
 | Partial ("quick") filter, **Add filter** | `FilterChipAndPopover`'s empty state (dashed, `+`) — how staff shows *Run Status*, *Version State*… before a value is applied. |
 | Search | Adapted `TextSearch` (above), placeholder "Search", 220px (staff's width on the runs and tasks pages). **Save as filter** sits beside it once there's a query. |
 | Filter row | Staff's flow-runs layout: `Stack` row (space-between, wrap, gap 1) → `FilterBar` left, actions right. With no filters it is one line. Once a filter is applied, search moves to its own line (with the views menu and Save view) and the filters — partial filters, chips, Add filter, Clear filters, Match all — get a line beneath it. Clear filters and Match all only appear while a filter is applied. |
@@ -77,7 +77,7 @@ exists:
 
 - Theme is the real `muiTheme` (the flow-studio-lite replica had drifted: different chip, table, tooltip
   and input styling). Tooltips are MUI defaults, as in staff.
-- Chips are staff's two-part chip (label + blue value box) rather than the segmented
+- Chips are staff's chip (column · operator · blue value box) rather than the segmented
   icon · type │ operator │ value chip; no column icon on chips.
 - Partial filters and Add filter are staff's dashed empty chips (no column icon).
 - Search is single-line (staff `TextSearch`); it no longer grows to four lines. Placeholder is "Search".
