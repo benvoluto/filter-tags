@@ -14,8 +14,6 @@ import {
   Grid,
   IconButton,
   InputLabel,
-  ListItemIcon,
-  Radio,
   ListItemText,
   MenuItem,
   MenuList,
@@ -40,7 +38,9 @@ import {
   type Join,
 } from "@/lib/filters"
 import { useFilterProbe } from "./filter-probe"
+import { CriteriaCombobox, NoRowsHint, withTypedValues } from "./criteria-combobox"
 import { usePanelMaxHeight, useRepositionPopover } from "./filter-popover"
+import { FIELD_SX, LIST_SX, NO_ROWS, NO_ROWS_COLUMN, OPTION_TEXT } from "./panel-styles"
 
 /*
  * The filter editor: what opens inside staff's filter popover (FilterChipAndPopover, or
@@ -53,11 +53,6 @@ import { usePanelMaxHeight, useRepositionPopover } from "./filter-popover"
 const BASIC_WIDTH = POPOVER_FIELD_MINIMUM_WIDTH
 const ADVANCED_WIDTH = "min(48rem, calc(100vw - 64px))"
 
-/**
- * Staff's theme pads `.MuiSelect-select` to 2px 14px, so a small select is ~24px tall. In this panel
- * selects sit beside 32px autocompletes, so they are padded to staff's FILTER_HEIGHT (32px).
- */
-const SELECT_SX: SxProps<Theme> = { "& .MuiSelect-select": { paddingY: "6px" } }
 
 /** A row of panel controls: the first child on the left, the rest pushed right. */
 const BAR_SX: SxProps<Theme> = {
@@ -77,22 +72,10 @@ function panelStackSx(maxHeight: number | undefined): SxProps<Theme> {
   return { maxHeight, minHeight: 0 }
 }
 
-/** One-line list rows at the panel's 14px (staff's small-field size). */
-const OPTION_TEXT = { variant: "body2" as const, noWrap: true }
-
 /** Suggestion dropdowns: short, so they don't run past the panel. */
 const LISTBOX_SX: SxProps<Theme> = { maxHeight: 220 }
 
-/** Scrolling value/column lists bleed to the popover edges, ruled top and bottom. */
-const LIST_SX: SxProps<Theme> = {
-  maxHeight: 260,
-  minHeight: 0,
-  overflowY: "auto",
-  marginX: -2,
-  paddingY: 0.5,
-  borderTop: `1px solid ${colors.border.light}`,
-  borderBottom: `1px solid ${colors.border.light}`,
-}
+
 
 export type FilterDraft = Omit<Filter, "id">
 
@@ -109,8 +92,6 @@ type FilterEditorProps = {
 type Row = { key: string; join: Join; column: ColumnKey | null; comparator: Comparator; values: string[] }
 type ReadyRow = Row & { column: ColumnKey }
 
-const NO_ROWS = "No rows match this with the current filters"
-const NO_ROWS_COLUMN = "Every value here would return no rows with the current filters"
 
 let rowSeq = 0
 function newRow(partial: Partial<Row> = {}): Row {
@@ -166,7 +147,29 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
   React.useLayoutEffect(() => reposition(), [reposition, advanced, rows.length, firstColumn])
 
   const updateRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
-  const changeColumn = (i: number, column: ColumnKey) => updateRow(i, { column, comparator: "is", values: [] })
+  const changeColumn = (i: number, column: ColumnKey) => {
+    updateRow(i, { column, comparator: "is", values: [] })
+    if (i === 0) setTyped("")
+  }
+
+  // Basic step 2: text still typed in the criteria field counts as criteria (see CriteriaCombobox).
+  const [typed, setTyped] = React.useState("")
+  /** The column the type step should highlight when you come back to it. */
+  const [lastColumn, setLastColumn] = React.useState<ColumnKey | null>(null)
+  const canGoBack = !fixedColumn && !initial
+  const goBack = () => {
+    setLastColumn(rows[0]?.column ?? null)
+    updateRow(0, { column: null, comparator: "is", values: [] })
+    setTyped("")
+  }
+  /** The basic row as it would be submitted: picked values plus the typed entry. */
+  const basicRow = (() => {
+    const first = rows[0]
+    if (!first?.column) return first
+    const arity = COMPARATOR_MAP[first.comparator].arity
+    if (arity !== "multi" && arity !== "single") return first
+    return { ...first, values: withTypedValues(first.values, typed, first.column, arity === "single") }
+  })()
   const changeComparator = (i: number, comparator: Comparator) =>
     setRows((rs) =>
       rs.map((r, j) => {
@@ -181,7 +184,7 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
       })
     )
 
-  const active = advanced ? rows : rows.slice(0, 1)
+  const active = advanced ? rows : [basicRow]
   const canSubmit = active.every(rowComplete)
   const submit = (list: Row[]) => {
     if (list.every(rowComplete)) onSubmit(draftFrom(list))
@@ -212,7 +215,12 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
     setConfirmBasic(false)
   }
   const toggleAdvanced = () => {
-    if (!advanced) setAdvanced(true)
+    if (!advanced) {
+      // Carry anything typed in the basic criteria field into the first advanced line.
+      setRows((rs) => [basicRow, ...rs.slice(1)])
+      setTyped("")
+      setAdvanced(true)
+    }
     else if (rows.length > 1) setConfirmBasic(true)
     else toBasic()
   }
@@ -314,32 +322,25 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
     )
   }
 
-  // ── Basic, step 1: pick the column (MenuList: arrows, type-ahead, Space/Enter to choose) ──
+  // ── Basic, step 1: pick the column (see ColumnPicker) ──
   const row = rows[0]
   if (!row.column) {
-    const columnIsEmpty = columnReturnsNoRowsFor(0)
     return (
-      <Box ref={panelRef} sx={{ width: BASIC_WIDTH }}>
-        <Stack spacing={1} sx={panelStackSx(maxHeight)}>
-          <InputLabel sx={{ flexShrink: 0 }}>Filter by</InputLabel>
-          <MenuList autoFocusItem aria-label="Columns" sx={LIST_SX}>
-            {COLUMNS.map((c) => {
-              const empty = columnIsEmpty?.(c.key) ?? false
-              return (
-                <MenuItem key={c.key} dense onClick={() => changeColumn(0, c.key)} title={empty ? NO_ROWS_COLUMN : undefined}>
-                  <ListItemText primary={c.label} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }} />
-                </MenuItem>
-              )
-            })}
-          </MenuList>
+      <ColumnPicker
+        panelRef={panelRef}
+        maxHeight={maxHeight}
+        lastColumn={lastColumn}
+        columnIsEmpty={columnReturnsNoRowsFor(0)}
+        onPick={(column) => changeColumn(0, column)}
+        footer={
           <Box sx={BAR_SX}>
             {advancedButton}
             <Button variant="outlined" size="small" onClick={onCancel}>
               Cancel
             </Button>
           </Box>
-        </Stack>
-      </Box>
+        }
+      />
     )
   }
 
@@ -353,22 +354,22 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
       sx={{ width: BASIC_WIDTH }}
       onSubmit={(e: React.FormEvent) => {
         e.preventDefault()
-        submit([row])
+        submit([basicRow])
       }}
       // Enter anywhere in the panel adds the filter (buttons keep their own Enter behaviour).
       onKeyDown={(e: React.KeyboardEvent) => {
         const target = e.target as HTMLElement
         if (e.key === "Enter" && (arity === "multi" || arity === "single") && !target.closest("button")) {
           e.preventDefault()
-          submit([row])
+          submit([basicRow])
         }
       }}
     >
       <Stack spacing={1.5} sx={panelStackSx(maxHeight)}>
         <Box sx={BAR_SX}>
           <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
-            {!fixedColumn && !initial ? (
-              <IconButton size="small" aria-label="Choose a different column" onClick={() => updateRow(0, { column: null, comparator: "is", values: [] })}>
+            {canGoBack ? (
+              <IconButton size="small" aria-label="Choose a different column" onClick={goBack}>
                 <ArrowLeftIcon size={16} />
               </IconButton>
             ) : null}
@@ -378,12 +379,15 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
         </Box>
 
         {arity === "multi" || arity === "single" ? (
-          <ValueList
+          <CriteriaCombobox
             single={arity === "single"}
             column={column}
             values={row.values}
             onChange={(values) => updateRow(0, { values })}
-            onCommit={() => submit([row])}
+            typed={typed}
+            onTypedChange={setTyped}
+            onCommit={(values) => submit([{ ...row, values }])}
+            onBack={canGoBack ? goBack : undefined}
             returnsNoRows={returnsNoRowsFor(0)}
           />
         ) : (
@@ -396,68 +400,70 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
   )
 }
 
-/** Basic multi-select: a MenuList of checkable values. Space toggles, Enter adds the filter. */
-function ValueList({
-  single = false,
-  column,
-  values,
-  onChange,
-  onCommit,
-  returnsNoRows,
+/**
+ * Basic step 1: pick the filter type (column). Arrows and type-ahead move through the list (MUI
+ * MenuList); Space or Enter picks the focused type. Coming back from the criteria step (← or
+ * Shift+Tab) starts on the type you left.
+ */
+function ColumnPicker({
+  panelRef,
+  maxHeight,
+  lastColumn,
+  columnIsEmpty,
+  onPick,
+  footer,
 }: {
-  /** "equals": exactly one value — radios, and picking one replaces the last. */
-  single?: boolean
-  column: ColumnKey
-  values: string[]
-  onChange: (values: string[]) => void
-  onCommit: () => void
-  returnsNoRows?: (value: string) => boolean
+  panelRef: React.RefObject<HTMLElement | null>
+  maxHeight: number | undefined
+  lastColumn: ColumnKey | null
+  columnIsEmpty?: (column: ColumnKey) => boolean
+  onPick: (column: ColumnKey) => void
+  footer: React.ReactNode
 }) {
-  const col = COLUMN_MAP[column]
-  const options = React.useMemo(() => distinctValues(column), [column])
-  const lower = values.map((v) => v.toLowerCase())
-  const toggle = (v: string) => {
-    if (single) return onChange([v])
-    const idx = lower.indexOf(v.toLowerCase())
-    onChange(idx >= 0 ? values.filter((_, i) => i !== idx) : [...values, v])
-  }
+  const listRef = React.useRef<HTMLUListElement>(null)
+  // Focus the starting type once the popover has opened: MUI's popover focus trap can move focus to
+  // its paper after MenuList's own autoFocusItem has run, which leaves arrows and Space dead.
+  React.useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const list = listRef.current
+      if (!list || list.contains(document.activeElement)) return
+      list.querySelector<HTMLElement>('[role="menuitem"].Mui-selected, [role="menuitem"]')?.focus()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [])
   return (
-    <MenuList
-      autoFocusItem
-      aria-label={`${col.label} values`}
-      sx={LIST_SX}
-      // Enter on a value submits the whole filter instead of toggling it.
-      onKeyDownCapture={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault()
-          e.stopPropagation()
-          onCommit()
-        }
-      }}
-    >
-      {options.map((o) => {
-        const checked = lower.includes(o.toLowerCase())
-        const empty = returnsNoRows?.(o) ?? false
-        return (
-          <MenuItem key={o} dense role={single ? "menuitemradio" : "menuitemcheckbox"} aria-checked={checked} onClick={() => toggle(o)} title={empty ? NO_ROWS : undefined}>
-            <ListItemIcon>
-              {single ? <Radio size="small" checked={checked} tabIndex={-1} /> : <Checkbox size="small" checked={checked} tabIndex={-1} />}
-            </ListItemIcon>
-            <ListItemText primary={formatCriterion(col, o)} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }} />
-            {empty ? <NoRowsHint /> : null}
-          </MenuItem>
-        )
-      })}
-    </MenuList>
-  )
-}
-
-/** Trailing "0 rows" on a value that would empty the table (the row's tooltip says why). */
-function NoRowsHint() {
-  return (
-    <Text variant="caption" color="warning" component="span" sx={{ marginLeft: 1, flexShrink: 0 }}>
-      0 rows
-    </Text>
+    <Box ref={panelRef} sx={{ width: BASIC_WIDTH }}>
+      <Stack spacing={1} sx={panelStackSx(maxHeight)}>
+        <InputLabel sx={{ flexShrink: 0 }}>Filter by</InputLabel>
+        <MenuList ref={listRef} autoFocusItem aria-label="Columns" sx={LIST_SX}>
+          {COLUMNS.map((c) => {
+            const empty = columnIsEmpty?.(c.key) ?? false
+            return (
+              <MenuItem
+                key={c.key}
+                dense
+                // MenuList focuses the selected item: the type you came back from.
+                selected={c.key === lastColumn}
+                onClick={() => onPick(c.key)}
+                // Pick on Space key-down: immediate, no page scroll, and independent of MUI's
+                // key-up click and MenuList's type-ahead.
+                onKeyDown={(e) => {
+                  if (e.key === " ") {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onPick(c.key)
+                  }
+                }}
+                title={empty ? NO_ROWS_COLUMN : undefined}
+              >
+                <ListItemText primary={c.label} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }} />
+              </MenuItem>
+            )
+          })}
+        </MenuList>
+        {footer}
+      </Stack>
+    </Box>
   )
 }
 
@@ -550,7 +556,7 @@ function ValuesCombobox({
           </li>
         )
       }}
-      renderInput={(params) => <TextField {...params} size="small" placeholder={values.length ? "" : `Select ${col.label.toLowerCase()}…`} />}
+      renderInput={(params) => <TextField {...params} size="small" sx={FIELD_SX} placeholder={values.length ? "" : `Select ${col.label.toLowerCase()}…`} />}
     />
   )
 }
@@ -591,7 +597,7 @@ function ValueField({
           <ListItemText primary={formatCriterion(col, option)} slotProps={{ primary: OPTION_TEXT }} />
         </li>
       )}
-      renderInput={(params) => <TextField {...params} size="small" placeholder={label} slotProps={{ htmlInput: { ...params.inputProps, "aria-label": label } }} autoFocus={autoFocus} />}
+      renderInput={(params) => <TextField {...params} size="small" sx={FIELD_SX} placeholder={label} slotProps={{ htmlInput: { ...params.inputProps, "aria-label": label } }} autoFocus={autoFocus} />}
     />
   )
 }
@@ -626,7 +632,7 @@ function ConditionRow({
             Where
           </Text>
         ) : (
-          <TextField select fullWidth size="small" sx={SELECT_SX} value={row.join} onChange={(e) => onJoin(e.target.value as Join)} slotProps={{ htmlInput: { "aria-label": "And / or" } }}>
+          <TextField select fullWidth size="small" sx={FIELD_SX} value={row.join} onChange={(e) => onJoin(e.target.value as Join)} slotProps={{ htmlInput: { "aria-label": "And / or" } }}>
             <MenuItem value="and">and</MenuItem>
             <MenuItem value="or">or</MenuItem>
           </TextField>
@@ -637,7 +643,7 @@ function ConditionRow({
           select
           fullWidth
           size="small"
-          sx={SELECT_SX}
+          sx={FIELD_SX}
           value={row.column ?? ""}
           onChange={(e) => onColumn(e.target.value as ColumnKey)}
           slotProps={{
@@ -659,7 +665,7 @@ function ConditionRow({
         {row.column ? (
           <ComparatorSelect column={row.column} value={row.comparator} onChange={onComparator} fullWidth />
         ) : (
-          <TextField select fullWidth size="small" sx={SELECT_SX} disabled value="" slotProps={{ select: { displayEmpty: true, renderValue: () => "Operator" } }}>
+          <TextField select fullWidth size="small" sx={FIELD_SX} disabled value="" slotProps={{ select: { displayEmpty: true, renderValue: () => "Operator" } }}>
             <MenuItem value="">Operator</MenuItem>
           </TextField>
         )}
@@ -699,7 +705,7 @@ function ComparatorSelect({
     <TextField
       select
       size="small"
-      sx={SELECT_SX}
+      sx={FIELD_SX}
       fullWidth={fullWidth}
       value={value}
       onChange={(e) => onChange(e.target.value as Comparator)}
@@ -736,7 +742,7 @@ function SearchFilterEditor({
       <Stack spacing={1.5}>
         <Stack spacing={0.5}>
           <InputLabel htmlFor="search-filter-text">Search text</InputLabel>
-          <TextField id="search-filter-text" size="small" value={text} onChange={(e) => setText(e.target.value)} autoFocus fullWidth helperText="Matches rows containing every word, in any column." />
+          <TextField id="search-filter-text" size="small" sx={FIELD_SX} value={text} onChange={(e) => setText(e.target.value)} autoFocus fullWidth helperText="Matches rows containing every word, in any column." />
         </Stack>
         <Box sx={BAR_SX}>
           <span />
