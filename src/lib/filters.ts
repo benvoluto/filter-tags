@@ -12,6 +12,7 @@ import {
 
 export type Comparator =
   | "is"
+  | "equals"
   | "is_not"
   | "contains"
   | "not_contains"
@@ -57,8 +58,14 @@ export function filterColumns(f: Filter): ColumnKey[] {
   return f.kind === "search" ? [] : conditionsOf(f).map((c) => c.column)
 }
 
-export const COMPARATORS: { value: Comparator; label: string; short: string; arity: "multi" | "one" | "two" | "none" }[] = [
-  { value: "is", label: "equals", short: "is", arity: "multi" },
+/**
+ * `arity`: multi = pick any number of the column's values · single = pick exactly one of them ·
+ * one / two = type (or pick) one or two bounds · none = no value.
+ * "is any of" is the default; "equals" is the same test restricted to one value.
+ */
+export const COMPARATORS: { value: Comparator; label: string; short: string; arity: "multi" | "single" | "one" | "two" | "none" }[] = [
+  { value: "is", label: "is any of", short: "is", arity: "multi" },
+  { value: "equals", label: "equals", short: "is", arity: "single" },
   { value: "is_not", label: "is not", short: "is not", arity: "multi" },
   { value: "contains", label: "contains", short: "contains", arity: "multi" },
   { value: "not_contains", label: "does not contain", short: "excludes", arity: "multi" },
@@ -103,6 +110,8 @@ export function matchCondition(row: RunRow, cond: Condition): boolean {
       return !isEmptyValue(raw)
     case "is":
       return values.length === 0 || values.includes(key)
+    case "equals":
+      return values.length === 0 || key === values[0]
     case "is_not":
       return !values.includes(key)
     case "contains": {
@@ -161,6 +170,7 @@ function describeCondition(c: Condition, full: boolean): string {
   if (cmp.arity === "none") return `${col.label} ${cmp.label}`
   if (cmp.arity === "two") return `${col.label} between ${vals[0] ?? "…"} and ${vals[1] ?? "…"}`
   if (cmp.arity === "one") return `${col.label} ${cmp.short} ${vals[0] ?? "…"}`
+  if (cmp.arity === "single") return `${col.label} is ${vals[0] ?? "…"}`
   if (c.comparator === "is") {
     if (full && vals.length > 1) return `${col.label} is any of: ${vals.join(", ")}`
     return `${col.label}: ${vals.join(", ")}`
@@ -186,6 +196,8 @@ function operatorPhrase(c: Condition): string {
   switch (c.comparator) {
     case "is":
       return many ? "is any of" : "is"
+    case "equals":
+      return "is"
     case "is_not":
       return many ? "is none of" : "is not"
     case "contains":

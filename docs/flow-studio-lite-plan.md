@@ -10,7 +10,7 @@ than in a standalone table.
 | | Staff app (production) | flow-studio-lite today | This branch |
 |---|---|---|---|
 | Page | `web/staff/src/scenes/Agents/Details/Flow/RunsTable.tsx` | `RunsTab` in `src/surfaces/flow-detail.tsx` | same `RunsTab`, behind a flag |
-| Filter row | `FilterBar` of `DateRangeFilter`, `AutocompleteFilter` × 3–4 (Run Status, Version State, Version #, Batch ID), `TextSearch` "Search by Entity ID" | `ListPageHead` with four **inert** chips (Date Range, Run Status, Version State, Version #) + a search that does nothing | search · partial filters · applied chips · Add filter · Clear · Match all (· Views) |
+| Filter row | `FilterBar` of `DateRangeFilter`, `AutocompleteFilter` × 3–4 (Run Status, Version State, Version #, Batch ID), `TextSearch` "Search by Entity ID" | `ListPageHead` with four **inert** chips (Date Range, Run Status, Version State, Version #) + a search that does nothing | search (own line once a filter is applied) · then partial filters · applied chips · Add filter · Clear · Match all (· Views) |
 | Stats | `FlowStatsBar`, recomputed from the filters | `Tiles` from cohort totals | `Tiles`, recomputed from the filtered rows |
 | Table | `NotableDataGrid` (DataGridPro), checkbox selection, row → run page | `NotableTable` (MUI `<Table>`) | `NotableDataGrid` (theirs, Pro) with header filter buttons |
 

@@ -8,7 +8,7 @@ import { BookmarkSimpleIcon, FunnelSimpleXIcon } from "@phosphor-icons/react"
 import { NoRecordsOverlay, NotableDataGrid, Tag, type TagColor, Text, colors, useTableState } from "common"
 import { FilterBar } from "@/vivaa/staff/components/Layout/FilterBar"
 import { FILTER_HEIGHT } from "@/vivaa/staff/components/FiltersV2/constants"
-import type { TextSearchHandle } from "@/vivaa/staff/components/FiltersV2/TextSearch"
+import type { SearchBoxHandle } from "./search-box"
 import { COLUMNS, COLUMN_MAP, ROWS, formatCell, isEmptyValue, type ColumnKey, type RunRow } from "@/lib/data"
 import { filterColumns, matchFilters, matchSearch, newFilterId, type Filter, type MatchMode } from "@/lib/filters"
 import type { SortRule } from "@/lib/sort"
@@ -93,7 +93,7 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
   const [headerFilter, setHeaderFilter] = React.useState<{ column: ColumnKey; anchor: Element } | null>(null)
   const [views, setViews] = React.useState<SavedView[]>([])
   const [selectedViewId, setSelectedViewId] = React.useState<string | null>(null)
-  const searchRef = React.useRef<TextSearchHandle>(null)
+  const searchRef = React.useRef<SearchBoxHandle>(null)
 
   // Staff's table state hook: page + page size + sort model, in the grid's own shapes.
   const { pagination, sort: sortState, paginationModel, goToFirstPage } = useTableState({
@@ -187,6 +187,67 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     setSelectedViewId(view.id)
   }
 
+  const hasFilters = filters.length > 0
+
+  /** Partial filters, applied chips and Add filter: the filters line. */
+  const filterControls = (
+    <>
+      {quickFilters.map((key) => (
+        <QuickFilter key={key} column={key} onAdd={addFilter} />
+      ))}
+      {filters.map((f) => (
+        <FilterChip key={f.id} filter={f} onChange={(d) => updateFilter(f.id, d)} onRemove={() => removeFilter(f.id)} />
+      ))}
+      <AddFilter isOpen={isAddOpen} setIsOpen={setIsAddOpen} onAdd={addFilter} />
+    </>
+  )
+
+  /** Clear filters and Match all: they act on the filters, so they end the filters line. */
+  const filterActions = (
+    <Stack direction="row" alignItems="center" gap={1} sx={{ minHeight: FILTER_HEIGHT }}>
+      {hasFilters &&
+        (showViews ? (
+          <Tooltip title="Clear filters">
+            <IconButton aria-label="Clear filters" onClick={clearFilters}>
+              <FunnelSimpleXIcon size={16} />
+            </IconButton>
+          </Tooltip>
+        ) : (
+          <Button variant="text" startIcon={<FunnelSimpleXIcon size={16} />} onClick={clearFilters}>
+            Clear filters
+          </Button>
+        ))}
+      <Tooltip title={matchMode === "all" ? "Rows must match every filter" : "Rows may match any filter"}>
+        <FormControlLabel
+          sx={{ marginLeft: 0, marginRight: 0, gap: 0.5, whiteSpace: "nowrap" }}
+          label={<Text variant="body2">{showViews ? "Match all" : "Match all filters"}</Text>}
+          control={
+            <Switch
+              size="small"
+              checked={matchMode === "all"}
+              onChange={(_, all) => {
+                setMatchMode(all ? "all" : "any")
+                goToFirstPage()
+              }}
+            />
+          }
+        />
+      </Tooltip>
+    </Stack>
+  )
+
+  /** Save view belongs with the views menu, on the search line. */
+  const saveViewButton = canSaveView ? (
+    <Button
+      variant="contained"
+      startIcon={<BookmarkSimpleIcon size={16} />}
+      onClick={saveView}
+      title={selectedView ? `Save as a new view (${selectedView.name} has been edited)` : undefined}
+    >
+      Save view
+    </Button>
+  ) : null
+
   const columns: GridColDef<RunRow>[] = COLUMNS.map((col) => ({
     field: col.key,
     headerName: col.label,
@@ -208,77 +269,44 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     <FilterProbeProvider filters={filters} matchMode={matchMode} query={query}>
       <ResetContext.Provider value={filters.length || query ? resetAll : null}>
         <Stack gap={2}>
-          {/* Staff's filter row: FilterBar on the left, page actions on the right, wrapping. */}
-          <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
-            <FilterBar>
-              {showViews && (
-                <ViewsMenu
-                  views={views}
-                  selectedId={selectedViewId}
-                  edited={viewEdited}
-                  onSelect={applyView}
-                  onRename={(id, name) => setViews((vs) => vs.map((v) => (v.id === id ? { ...v, name } : v)))}
+          {/*
+            Staff's filter row: FilterBar on the left, actions on the right, wrapping. With no filters
+            it is one line. Once a filter is applied, search gets its own line and the filters (partial
+            filters, chips, Add filter, Clear, Match all) a line of their own beneath it. The search
+            sits at the same place in the tree in both layouts, so it never remounts mid-typing.
+          */}
+          <Stack gap={1}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+              <FilterBar>
+                {showViews && (
+                  <ViewsMenu
+                    views={views}
+                    selectedId={selectedViewId}
+                    edited={viewEdited}
+                    onSelect={applyView}
+                    onRename={(id, name) => setViews((vs) => vs.map((v) => (v.id === id ? { ...v, name } : v)))}
+                  />
+                )}
+                <SearchBox
+                  ref={searchRef}
+                  value={query}
+                  onChange={(next) => {
+                    setQuery(next)
+                    goToFirstPage()
+                  }}
+                  resultCount={rows.length}
+                  onSaveAsFilter={saveSearchAsFilter}
                 />
-              )}
-              <SearchBox
-                ref={searchRef}
-                value={query}
-                onChange={(next) => {
-                  setQuery(next)
-                  goToFirstPage()
-                }}
-                resultCount={rows.length}
-                onSaveAsFilter={saveSearchAsFilter}
-              />
-              {quickFilters.map((key) => (
-                <QuickFilter key={key} column={key} onAdd={addFilter} />
-              ))}
-              {filters.map((f) => (
-                <FilterChip key={f.id} filter={f} onChange={(d) => updateFilter(f.id, d)} onRemove={() => removeFilter(f.id)} />
-              ))}
-              <AddFilter isOpen={isAddOpen} setIsOpen={setIsAddOpen} onAdd={addFilter} />
-            </FilterBar>
-
-            <Stack direction="row" alignItems="center" gap={1} sx={{ minHeight: FILTER_HEIGHT }}>
-              {filters.length > 0 &&
-                (showViews ? (
-                  <Tooltip title="Clear filters">
-                    <IconButton aria-label="Clear filters" onClick={clearFilters}>
-                      <FunnelSimpleXIcon size={16} />
-                    </IconButton>
-                  </Tooltip>
-                ) : (
-                  <Button variant="text" startIcon={<FunnelSimpleXIcon size={16} />} onClick={clearFilters}>
-                    Clear filters
-                  </Button>
-                ))}
-              <Tooltip title={matchMode === "all" ? "Rows must match every filter" : "Rows may match any filter"}>
-                <FormControlLabel
-                  sx={{ marginLeft: 0, marginRight: 0, gap: 0.5, whiteSpace: "nowrap" }}
-                  label={<Text variant="body2">{showViews ? "Match all" : "Match all filters"}</Text>}
-                  control={
-                    <Switch
-                      size="small"
-                      checked={matchMode === "all"}
-                      onChange={(_, all) => {
-                        setMatchMode(all ? "all" : "any")
-                        goToFirstPage()
-                      }}
-                    />
-                  }
-                />
-              </Tooltip>
-              {canSaveView && (
-                <Button
-                  variant="contained"
-                  startIcon={<BookmarkSimpleIcon size={16} />}
-                  onClick={saveView}
-                  title={selectedView ? `Save as a new view (${selectedView.name} has been edited)` : undefined}
-                >
-                  Save view
-                </Button>
-              )}
+                {!hasFilters && filterControls}
+              </FilterBar>
+              {hasFilters ? saveViewButton : filterActions}
             </Stack>
+            {hasFilters && (
+              <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+                <FilterBar>{filterControls}</FilterBar>
+                {filterActions}
+              </Stack>
+            )}
           </Stack>
 
           <NotableDataGrid<RunRow>

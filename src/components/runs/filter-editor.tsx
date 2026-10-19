@@ -15,6 +15,7 @@ import {
   IconButton,
   InputLabel,
   ListItemIcon,
+  Radio,
   ListItemText,
   MenuItem,
   MenuList,
@@ -28,7 +29,6 @@ import { ArrowLeftIcon, PlusIcon, SlidersHorizontalIcon, TrashIcon } from "@phos
 import { Text, colors } from "common"
 import { POPOVER_FIELD_MINIMUM_WIDTH } from "@/vivaa/staff/components/FiltersV2/constants"
 
-import { COLUMN_ICONS } from "@/lib/column-icons"
 import { COLUMNS, COLUMN_MAP, distinctValues, formatCriterion, type ColumnKey } from "@/lib/data"
 import {
   COMPARATOR_MAP,
@@ -40,7 +40,7 @@ import {
   type Join,
 } from "@/lib/filters"
 import { useFilterProbe } from "./filter-probe"
-import { useRepositionPopover } from "./filter-popover"
+import { usePanelMaxHeight, useRepositionPopover } from "./filter-popover"
 
 /*
  * The filter editor: what opens inside staff's filter popover (FilterChipAndPopover, or
@@ -52,7 +52,6 @@ import { useRepositionPopover } from "./filter-popover"
 /** Basic panel: staff's popover field width. Advanced: wide enough for a five-part condition row. */
 const BASIC_WIDTH = POPOVER_FIELD_MINIMUM_WIDTH
 const ADVANCED_WIDTH = "min(48rem, calc(100vw - 64px))"
-const ICON_COLOR = colors.extended.gray["45"]
 
 /**
  * Staff's theme pads `.MuiSelect-select` to 2px 14px, so a small select is ~24px tall. In this panel
@@ -66,12 +65,28 @@ const BAR_SX: SxProps<Theme> = {
   alignItems: "center",
   flexWrap: "wrap",
   gap: 1,
+  flexShrink: 0,
   "& > :first-of-type:not(:last-child)": { marginRight: "auto", minWidth: 0 },
 }
+
+/**
+ * The panel's column: capped to the space below the anchor (see usePanelMaxHeight), so the list
+ * inside scrolls instead of the popover sliding up over the filter row and its own buttons.
+ */
+function panelStackSx(maxHeight: number | undefined): SxProps<Theme> {
+  return { maxHeight, minHeight: 0 }
+}
+
+/** One-line list rows at the panel's 14px (staff's small-field size). */
+const OPTION_TEXT = { variant: "body2" as const, noWrap: true }
+
+/** Suggestion dropdowns: short, so they don't run past the panel. */
+const LISTBOX_SX: SxProps<Theme> = { maxHeight: 220 }
 
 /** Scrolling value/column lists bleed to the popover edges, ruled top and bottom. */
 const LIST_SX: SxProps<Theme> = {
   maxHeight: 260,
+  minHeight: 0,
   overflowY: "auto",
   marginX: -2,
   paddingY: 0.5,
@@ -144,6 +159,8 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
   const [confirmBasic, setConfirmBasic] = React.useState(false)
   const probe = useFilterProbe()
   const reposition = useRepositionPopover()
+  const panelRef = React.useRef<HTMLElement>(null)
+  const maxHeight = usePanelMaxHeight(panelRef)
   // The panel changes size between steps / modes / row counts: keep it on screen.
   const firstColumn = rows[0]?.column
   React.useLayoutEffect(() => reposition(), [reposition, advanced, rows.length, firstColumn])
@@ -154,8 +171,13 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
     setRows((rs) =>
       rs.map((r, j) => {
         if (j !== i) return r
-        const same = COMPARATOR_MAP[comparator].arity === COMPARATOR_MAP[r.comparator].arity
-        return { ...r, comparator, values: same ? r.values : [] }
+        const from = COMPARATOR_MAP[r.comparator].arity
+        const to = COMPARATOR_MAP[comparator].arity
+        if (from === to) return { ...r, comparator }
+        // "is any of" ↔ "equals" pick from the same list: carry the selection over (one value for equals).
+        const listPicks = (a: string) => a === "multi" || a === "single"
+        if (listPicks(from) && listPicks(to)) return { ...r, comparator, values: to === "single" ? r.values.slice(0, 1) : r.values }
+        return { ...r, comparator, values: [] }
       })
     )
 
@@ -218,13 +240,14 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
     return (
       <Box
         component="form"
+        ref={panelRef}
         sx={{ width: ADVANCED_WIDTH }}
         onSubmit={(e: React.FormEvent) => {
           e.preventDefault()
           submit(rows)
         }}
       >
-        <Stack spacing={1.5}>
+        <Stack spacing={1.5} sx={panelStackSx(maxHeight)}>
           <Box sx={BAR_SX}>
             <InputLabel>Advanced filter</InputLabel>
             <Text variant="caption" color={colors.content.dark}>
@@ -232,7 +255,7 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
             </Text>
           </Box>
 
-          <Stack spacing={1}>
+          <Stack spacing={1} sx={{ minHeight: 0, overflowY: "auto", paddingTop: 0.5 }}>
             {rows.map((row, i) => (
               <ConditionRow
                 key={row.key}
@@ -296,18 +319,15 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
   if (!row.column) {
     const columnIsEmpty = columnReturnsNoRowsFor(0)
     return (
-      <Box sx={{ width: BASIC_WIDTH }}>
-        <Stack spacing={1}>
-          <InputLabel>Filter by</InputLabel>
+      <Box ref={panelRef} sx={{ width: BASIC_WIDTH }}>
+        <Stack spacing={1} sx={panelStackSx(maxHeight)}>
+          <InputLabel sx={{ flexShrink: 0 }}>Filter by</InputLabel>
           <MenuList autoFocusItem aria-label="Columns" sx={LIST_SX}>
             {COLUMNS.map((c) => {
               const empty = columnIsEmpty?.(c.key) ?? false
               return (
-                <MenuItem key={c.key} onClick={() => changeColumn(0, c.key)} title={empty ? NO_ROWS_COLUMN : undefined}>
-                  <ListItemIcon>
-                    <ColumnIcon column={c.key} warning={empty} />
-                  </ListItemIcon>
-                  <ListItemText primary={c.label} slotProps={{ primary: { color: empty ? "warning" : undefined } }} />
+                <MenuItem key={c.key} dense onClick={() => changeColumn(0, c.key)} title={empty ? NO_ROWS_COLUMN : undefined}>
+                  <ListItemText primary={c.label} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }} />
                 </MenuItem>
               )
             })}
@@ -329,6 +349,7 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
   return (
     <Box
       component="form"
+      ref={panelRef}
       sx={{ width: BASIC_WIDTH }}
       onSubmit={(e: React.FormEvent) => {
         e.preventDefault()
@@ -337,13 +358,13 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
       // Enter anywhere in the panel adds the filter (buttons keep their own Enter behaviour).
       onKeyDown={(e: React.KeyboardEvent) => {
         const target = e.target as HTMLElement
-        if (e.key === "Enter" && arity === "multi" && !target.closest("button")) {
+        if (e.key === "Enter" && (arity === "multi" || arity === "single") && !target.closest("button")) {
           e.preventDefault()
           submit([row])
         }
       }}
     >
-      <Stack spacing={1.5}>
+      <Stack spacing={1.5} sx={panelStackSx(maxHeight)}>
         <Box sx={BAR_SX}>
           <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
             {!fixedColumn && !initial ? (
@@ -351,14 +372,14 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
                 <ArrowLeftIcon size={16} />
               </IconButton>
             ) : null}
-            <ColumnIcon column={column} />
             <InputLabel sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>{COLUMN_MAP[column].label} filter</InputLabel>
           </Stack>
           <ComparatorSelect column={column} value={row.comparator} onChange={(c) => changeComparator(0, c)} />
         </Box>
 
-        {arity === "multi" ? (
+        {arity === "multi" || arity === "single" ? (
           <ValueList
+            single={arity === "single"}
             column={column}
             values={row.values}
             onChange={(values) => updateRow(0, { values })}
@@ -375,20 +396,17 @@ function ColumnFilterEditor({ initial, column: fixedColumn, onSubmit, onCancel }
   )
 }
 
-/** The column's icon, 16px gray[45] (amber when every value would return no rows). */
-function ColumnIcon({ column, warning }: { column: ColumnKey; warning?: boolean }) {
-  const Icon = COLUMN_ICONS[column]
-  return <Icon size={16} color={warning ? colors.warning.default : ICON_COLOR} />
-}
-
 /** Basic multi-select: a MenuList of checkable values. Space toggles, Enter adds the filter. */
 function ValueList({
+  single = false,
   column,
   values,
   onChange,
   onCommit,
   returnsNoRows,
 }: {
+  /** "equals": exactly one value — radios, and picking one replaces the last. */
+  single?: boolean
   column: ColumnKey
   values: string[]
   onChange: (values: string[]) => void
@@ -399,6 +417,7 @@ function ValueList({
   const options = React.useMemo(() => distinctValues(column), [column])
   const lower = values.map((v) => v.toLowerCase())
   const toggle = (v: string) => {
+    if (single) return onChange([v])
     const idx = lower.indexOf(v.toLowerCase())
     onChange(idx >= 0 ? values.filter((_, i) => i !== idx) : [...values, v])
   }
@@ -420,19 +439,25 @@ function ValueList({
         const checked = lower.includes(o.toLowerCase())
         const empty = returnsNoRows?.(o) ?? false
         return (
-          <MenuItem key={o} role="menuitemcheckbox" aria-checked={checked} onClick={() => toggle(o)} title={empty ? NO_ROWS : undefined}>
+          <MenuItem key={o} dense role={single ? "menuitemradio" : "menuitemcheckbox"} aria-checked={checked} onClick={() => toggle(o)} title={empty ? NO_ROWS : undefined}>
             <ListItemIcon>
-              <Checkbox size="small" checked={checked} tabIndex={-1} />
+              {single ? <Radio size="small" checked={checked} tabIndex={-1} /> : <Checkbox size="small" checked={checked} tabIndex={-1} />}
             </ListItemIcon>
-            <ListItemText
-              primary={formatCriterion(col, o)}
-              secondary={empty ? "No matching rows" : undefined}
-              slotProps={{ primary: { color: empty ? "warning" : undefined }, secondary: { color: "warning" } }}
-            />
+            <ListItemText primary={formatCriterion(col, o)} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }} />
+            {empty ? <NoRowsHint /> : null}
           </MenuItem>
         )
       })}
     </MenuList>
+  )
+}
+
+/** Trailing "0 rows" on a value that would empty the table (the row's tooltip says why). */
+function NoRowsHint() {
+  return (
+    <Text variant="caption" color="warning" component="span" sx={{ marginLeft: 1, flexShrink: 0 }}>
+      0 rows
+    </Text>
   )
 }
 
@@ -478,7 +503,7 @@ function CriteriaInput({
       }}
     />
   )
-  if (arity === "one") return field(0, "Value")
+  if (arity === "one" || arity === "single") return field(0, "Value")
   return (
     <Stack direction="row" spacing={1}>
       {field(0, "From")}
@@ -509,6 +534,7 @@ function ValuesCombobox({
       size="small"
       disableCloseOnSelect
       limitTags={2}
+      slotProps={{ listbox: { sx: LISTBOX_SX } }}
       options={options}
       value={values}
       onChange={(_, next) => onChange(next)}
@@ -519,7 +545,8 @@ function ValuesCombobox({
         return (
           <li key={key} {...props} title={empty ? NO_ROWS : undefined}>
             <Checkbox size="small" checked={selected} tabIndex={-1} />
-            <ListItemText primary={formatCriterion(col, option)} slotProps={{ primary: { color: empty ? "warning" : undefined } }} />
+            <ListItemText primary={formatCriterion(col, option)} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }} />
+            {empty ? <NoRowsHint /> : null}
           </li>
         )
       }}
@@ -549,7 +576,9 @@ function ValueField({
       freeSolo
       fullWidth
       size="small"
-      openOnFocus
+      // Suggestions open when you type, click the field or press ↓ — not on focus, where they
+      // dropped over the panel's buttons the moment a > / < / between operator was picked.
+      slotProps={{ listbox: { sx: LISTBOX_SX } }}
       options={options}
       inputValue={value}
       onInputChange={(_, v) => onChange(v)}
@@ -559,7 +588,7 @@ function ValueField({
       }}
       renderOption={({ key, ...props }, option) => (
         <li key={key} {...props}>
-          <ListItemText primary={formatCriterion(col, option)} secondary={formatCriterion(col, option) !== option ? option : undefined} />
+          <ListItemText primary={formatCriterion(col, option)} slotProps={{ primary: OPTION_TEXT }} />
         </li>
       )}
       renderInput={(params) => <TextField {...params} size="small" placeholder={label} slotProps={{ htmlInput: { ...params.inputProps, "aria-label": label } }} autoFocus={autoFocus} />}
@@ -620,10 +649,7 @@ function ConditionRow({
             const empty = columnReturnsNoRows?.(c.key) ?? false
             return (
               <MenuItem key={c.key} value={c.key} title={empty ? NO_ROWS_COLUMN : undefined}>
-                <ListItemIcon>
-                  <ColumnIcon column={c.key} warning={empty} />
-                </ListItemIcon>
-                <ListItemText primary={c.label} slotProps={{ primary: { color: empty ? "warning" : undefined } }} />
+                <ListItemText primary={c.label} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }} />
               </MenuItem>
             )
           })}
