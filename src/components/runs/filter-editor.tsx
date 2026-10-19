@@ -38,9 +38,9 @@ import {
   type Join,
 } from "@/lib/filters"
 import { useFilterProbe } from "./filter-probe"
-import { CriteriaCombobox, NoRowsHint, withTypedValues } from "./criteria-combobox"
+import { CriteriaCombobox, withTypedValues } from "./criteria-combobox"
 import { usePanelMaxHeight, useRepositionPopover } from "./filter-popover"
-import { FIELD_SX, LIST_SX, NO_ROWS, NO_ROWS_COLUMN, OPTION_TEXT } from "./panel-styles"
+import { FIELD_SX, LIST_SX, NO_ROWS, NO_ROWS_COLOR, NO_ROWS_COLUMN, OPTION_TEXT } from "./panel-styles"
 
 /*
  * The filter editor: what opens inside staff's filter popover (FilterChipAndPopover, or
@@ -456,7 +456,7 @@ function ColumnPicker({
                 }}
                 title={empty ? NO_ROWS_COLUMN : undefined}
               >
-                <ListItemText primary={c.label} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }} />
+                <ListItemText primary={c.label} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? NO_ROWS_COLOR : undefined } }} />
               </MenuItem>
             )
           })}
@@ -551,8 +551,7 @@ function ValuesCombobox({
         return (
           <li key={key} {...props} title={empty ? NO_ROWS : undefined}>
             <Checkbox size="small" checked={selected} tabIndex={-1} />
-            <ListItemText primary={formatCriterion(col, option)} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }} />
-            {empty ? <NoRowsHint /> : null}
+            <ListItemText primary={formatCriterion(col, option)} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? NO_ROWS_COLOR : undefined } }} />
           </li>
         )
       }}
@@ -655,7 +654,7 @@ function ConditionRow({
             const empty = columnReturnsNoRows?.(c.key) ?? false
             return (
               <MenuItem key={c.key} value={c.key} title={empty ? NO_ROWS_COLUMN : undefined}>
-                <ListItemText primary={c.label} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }} />
+                <ListItemText primary={c.label} slotProps={{ primary: { ...OPTION_TEXT, color: empty ? NO_ROWS_COLOR : undefined } }} />
               </MenuItem>
             )
           })}

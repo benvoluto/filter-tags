@@ -24,6 +24,13 @@ export const LIST_SX: SxProps<Theme> = {
   borderBottom: `1px solid ${colors.border.light}`,
 }
 
+/**
+ * Text colour for a value or type that would leave no rows with the current filters: staff's own
+ * de-emphasis token, `content.disabled` (gray 65). The row's tooltip (NO_ROWS / NO_ROWS_COLUMN)
+ * says why.
+ */
+export const NO_ROWS_COLOR = colors.content.disabled
+
 export const NO_ROWS = "No rows match this with the current filters"
 export const NO_ROWS_COLUMN = "Every value here would return no rows with the current filters"
 

@@ -15,18 +15,9 @@ import {
 } from "@mui/material"
 import { MagnifyingGlassIcon, PlusIcon } from "@phosphor-icons/react"
 
-import { Text, colors } from "common"
+import { colors } from "common"
 import { COLUMN_MAP, distinctValues, formatCriterion, type ColumnKey } from "@/lib/data"
-import { CHECK_ROW_PADDING_LEFT, FIELD_SX, LIST_SX, NO_ROWS, OPTION_TEXT } from "./panel-styles"
-
-/** Trailing "0 rows" on a value that would empty the table (the row's tooltip says why). */
-export function NoRowsHint() {
-  return (
-    <Text variant="caption" color="warning" component="span" sx={{ marginLeft: 1, flexShrink: 0 }}>
-      0 rows
-    </Text>
-  )
-}
+import { CHECK_ROW_PADDING_LEFT, FIELD_SX, LIST_SX, NO_ROWS, NO_ROWS_COLOR, OPTION_TEXT } from "./panel-styles"
 
 /**
  * A typed value as a criterion: the column's own value when the text matches one exactly (by raw
@@ -344,9 +335,8 @@ export function CriteriaCombobox({
                 </ListItemIcon>
                 <ListItemText
                   primary={formatCriterion(col, item.value)}
-                  slotProps={{ primary: { ...OPTION_TEXT, color: empty ? "warning" : undefined } }}
+                  slotProps={{ primary: { ...OPTION_TEXT, color: empty ? NO_ROWS_COLOR : undefined } }}
                 />
-                {empty ? <NoRowsHint /> : null}
               </MenuItem>
             </React.Fragment>
           )
