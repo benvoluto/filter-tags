@@ -1,0 +1,100 @@
+import type { WebWorkerMLCEngine } from "@mlc-ai/web-llm"
+
+import { FEW_SHOT, MODEL_SCHEMA, buildSystemPrompt, type ModelOutput } from "./prompt-filters"
+
+/*
+ * The on-device model: Qwen2.5 1.5B Instruct through WebLLM (WebGPU), in a web worker. About 1 GB
+ * on first load, then cached by the browser. One engine per page, shared by every component, so
+ * switching prototype variants doesn't reload it.
+ */
+
+const MODEL_F16 = "Qwen2.5-1.5B-Instruct-q4f16_1-MLC"
+/** For GPUs without 16-bit float shaders. */
+const MODEL_F32 = "Qwen2.5-1.5B-Instruct-q4f32_1-MLC"
+
+export type ModelStatus =
+  | { state: "idle" }
+  | { state: "unsupported"; reason: string }
+  | { state: "loading"; progress: number; text: string }
+  | { state: "ready"; modelId: string }
+  | { state: "error"; message: string }
+
+let status: ModelStatus = { state: "idle" }
+let engine: Promise<WebWorkerMLCEngine | null> | null = null
+const listeners = new Set<(s: ModelStatus) => void>()
+
+function setStatus(next: ModelStatus) {
+  status = next
+  listeners.forEach((l) => l(next))
+}
+
+export function getModelStatus() {
+  return status
+}
+
+export function subscribeModelStatus(listener: (s: ModelStatus) => void) {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+type GpuNavigator = Navigator & {
+  gpu?: { requestAdapter: () => Promise<{ features: { has: (f: string) => boolean } } | null> }
+}
+
+/** Starts the download/compile (idempotent). Resolves to null when this browser can't run it. */
+export function loadModel(): Promise<WebWorkerMLCEngine | null> {
+  if (engine) return engine
+  if (status.state === "unsupported") return Promise.resolve(null)
+  const start = async () => {
+    const gpu = (navigator as GpuNavigator).gpu
+    if (!gpu) throw new UnsupportedError("This browser has no WebGPU")
+    const adapter = await gpu.requestAdapter()
+    if (!adapter) throw new UnsupportedError("No WebGPU adapter (GPU blocked or unavailable)")
+    const modelId = adapter.features.has("shader-f16") ? MODEL_F16 : MODEL_F32
+    setStatus({ state: "loading", progress: 0, text: "Starting…" })
+    const { CreateWebWorkerMLCEngine } = await import("@mlc-ai/web-llm")
+    const worker = new Worker(new URL("./llm.worker.ts", import.meta.url), { type: "module" })
+    const created = await CreateWebWorkerMLCEngine(worker, modelId, {
+      initProgressCallback: (r) => setStatus({ state: "loading", progress: r.progress, text: r.text }),
+    })
+    setStatus({ state: "ready", modelId })
+    return created
+  }
+  engine = start().catch((e: unknown) => {
+    if (e instanceof UnsupportedError) {
+      setStatus({ state: "unsupported", reason: e.message })
+    } else {
+      // A failed download can be retried on the next load.
+      engine = null
+      setStatus({ state: "error", message: e instanceof Error ? e.message : String(e) })
+    }
+    return null
+  })
+  return engine
+}
+
+class UnsupportedError extends Error {}
+
+/** Sentence → constrained JSON. Throws if the model isn't ready. */
+export async function promptModel(text: string): Promise<ModelOutput> {
+  const llm = status.state === "ready" ? await engine : null
+  if (!llm) throw new Error("Model not ready")
+  const reply = await llm.chat.completions.create({
+    messages: [
+      { role: "system", content: buildSystemPrompt() },
+      ...FEW_SHOT.flatMap((ex) => [
+        { role: "user" as const, content: ex.user },
+        { role: "assistant" as const, content: JSON.stringify(ex.output) },
+      ]),
+      { role: "user", content: text },
+    ],
+    temperature: 0,
+    max_tokens: 400,
+    response_format: { type: "json_object", schema: MODEL_SCHEMA },
+  })
+  // The chat history isn't reused: each prompt stands alone.
+  await llm.resetChat()
+  return JSON.parse(reply.choices[0]?.message.content ?? "{}") as ModelOutput
+}

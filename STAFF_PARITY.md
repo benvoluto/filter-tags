@@ -60,6 +60,26 @@ exists:
 | Operators | **is any of** (default; pick several values) and **equals** (pick exactly one — radios), then is not, contains, does not contain, greater than, greater than or equal to, less than, less than or equal to, between, is empty, is not null, as each column type allows. In a basic filter, typing `>` `<` `>=` `<=` `=` `!=` at the start of the criteria field switches the operator (the rest becomes the value; `=` right after `>`/`<` makes it ≥/≤; comparison symbols only apply to numbers, durations, percentages and dates). Switching between *is any of* and *equals* keeps the selection (the first value, for equals). |
 | Empty state | `NoRecordsOverlay` with a custom title and a reset action. |
 
+## "Prompt" variant (natural-language filters, on-device model)
+
+The fourth variant swaps search and Add filter for one large field (`prompt-box.tsx`). A sentence
+becomes ordinary filter chips and, if it names one, a sort. Underneath, underlined links (status,
+customer, created by → Owner, date started) open the same filter editor as the quick filters.
+
+- **Model:** Qwen2.5 1.5B Instruct via WebLLM (`@mlc-ai/web-llm`), WebGPU, in a web worker
+  (`lib/llm.worker.ts`, `lib/filter-model.ts`). About 1 GB from Hugging Face on first focus of the
+  field, then cached by the browser. The f32 build is used on GPUs without `shader-f16`.
+- **The model never sees rows.** Its output is constrained to a JSON schema (column, operator,
+  values; sort; leftover search text). `lib/prompt-filters.ts` then grounds it in code: values are
+  matched to the column's real values ("riverbend" → Riverbend Health, "failing" → Failed), date
+  tokens (`days_ago:3`, "yesterday") and duration units are resolved, operators a column can't use
+  are dropped, and split filters on one column are merged. Anything changed or dropped is listed.
+- **"Today"** for relative dates is the newest run in the sample data (Oct 14, 2026), not the clock.
+- **Applying:** a prompt's filters replace existing filters on the same columns and keep the rest.
+  A line under the field shows how the last prompt was read, with Undo.
+- **Fallback:** until the model is ready, or where WebGPU is missing or blocked, prompts go through
+  a small rule-based parser (`parseWithRules`), labelled "basic parser".
+
 ## Runtime differences from the staff app (environment, not design)
 
 - **Next.js, not Vite.** The prototype stays on Next for Vercel. Synced files import siblings as `./x.js`;
