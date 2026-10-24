@@ -81,10 +81,16 @@ placeholder, and open the same filter editor as the quick filters; they disappea
   the field (placeholder "Describe the search, filter, and sort you want") appears once it's ready.
   Where WebGPU is missing or the download fails, the field appears anyway and prompts go through a
   small rule-based parser (`parseWithRules`).
-- **Views:** the views menu sits to the right of the field, with Save view once results are
-  filtered. The model names each saved view in 2–4 words (a rule-made name if it isn't available).
-  Typing more than 10 characters of a saved view's name shows the rest in grey; Tab completes it,
-  Enter opens the view.
+- **Views:** the views pulldown is inline text inside the field (stack icon, name, ▾; no border,
+  the links' 13px). With no filters, no selected view and nothing typed it follows the filter
+  links; otherwise it leads the field's bottom line, at the left edge, and stays there while the
+  user types. Save view sits to the right of the field once results are filtered. The model names
+  each saved view in 2–4 words (a rule-made name if it isn't available). Typing more than 10
+  characters of a saved view's name shows the rest in grey; Tab completes it, Enter opens the view.
+  Selecting a view applies its filters; the filters line includes Add filter. Clearing every filter
+  (Clear filters, the C shortcut, or removing the last chip) also clears the selected view.
+- **Focus:** the field takes focus when it appears, so the F / S / C shortcuts (which only work
+  when nothing is focused) need a click outside it first.
 
 ## Runtime differences from the staff app (environment, not design)
 

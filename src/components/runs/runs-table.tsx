@@ -30,7 +30,7 @@ import { FilterProbeProvider } from "./filter-probe"
 import { AddFilter, QuickFilter } from "./quick-filter"
 import { PROMPT_PLACEHOLDER, PromptBox, type AppliedPrompt } from "./prompt-box"
 import { SEARCH_PLACEHOLDER, SearchBox } from "./search-box"
-import { ViewsMenu } from "./views-menu"
+import { InlineViewsMenu, ViewsMenu } from "./views-menu"
 
 /** Partial filters shown next to the search box: column chosen, criteria pending. */
 const QUICK_FILTERS: ColumnKey[] = ["customer", "trigger", "duration"]
@@ -134,6 +134,8 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
       } else if (key === "c") {
         e.preventDefault()
         setFilters((fs) => (fs.length ? [] : fs))
+        // Prompt variant: clearing every filter also clears the selected view.
+        if (variant === "prompt") setSelectedViewId(null)
         goToFirstPage()
       }
     }
@@ -160,11 +162,15 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     goToFirstPage()
   }
   const removeFilter = (id: string) => {
-    setFilters((fs) => fs.filter((f) => f.id !== id))
+    const remaining = filters.filter((f) => f.id !== id)
+    setFilters(remaining)
+    if (!remaining.length && variant === "prompt") setSelectedViewId(null)
     goToFirstPage()
   }
+  /** Prompt variant: clearing every filter also clears the selected view. */
   const clearFilters = () => {
     setFilters([])
+    if (variant === "prompt") setSelectedViewId(null)
     goToFirstPage()
   }
   const saveSearchAsFilter = () => {
@@ -241,7 +247,7 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
       {filters.map((f) => (
         <FilterChip key={f.id} filter={f} onChange={(d) => updateFilter(f.id, d)} onRemove={() => removeFilter(f.id)} />
       ))}
-      {variant !== "prompt" && <AddFilter isOpen={isAddOpen} setIsOpen={setIsAddOpen} onAdd={addFilter} />}
+      <AddFilter isOpen={isAddOpen} setIsOpen={setIsAddOpen} onAdd={addFilter} />
     </>
   )
 
@@ -295,13 +301,14 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     </Button>
   ) : null
 
+  const onRenameView = (id: string, name: string) => setViews((vs) => vs.map((v) => (v.id === id ? { ...v, name } : v)))
   const viewsMenu = (
     <ViewsMenu
       views={views}
       selectedId={selectedViewId}
       edited={viewEdited}
       onSelect={applyView}
-      onRename={(id, name) => setViews((vs) => vs.map((v) => (v.id === id ? { ...v, name } : v)))}
+      onRename={onRenameView}
     />
   )
 
@@ -334,7 +341,7 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
           */}
           {variant === "prompt" ? (
             <Stack gap={1}>
-              {/* The prompt, with the views menu and Save view to its right (below it on narrow screens). */}
+              {/* The prompt (views pulldown inside it), with Save view to its right. */}
               <Stack direction="row" alignItems="flex-start" flexWrap="wrap" gap={1}>
                 <Box sx={{ flex: "1 1 420px", minWidth: 0 }}>
                   <PromptBox
@@ -342,12 +349,19 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
                     onAddFilter={addFilter}
                     views={views}
                     onOpenView={applyView}
+                    pristine={!hasFilters && !selectedViewId}
+                    viewsMenu={
+                      <InlineViewsMenu
+                        views={views}
+                        selectedId={selectedViewId}
+                        edited={viewEdited}
+                        onSelect={applyView}
+                        onRename={onRenameView}
+                      />
+                    }
                   />
                 </Box>
-                <Stack direction="row" alignItems="center" gap={1}>
-                  {viewsMenu}
-                  {saveViewButton}
-                </Stack>
+                {saveViewButton}
               </Stack>
               {hasFilters && (
                 <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>

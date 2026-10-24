@@ -62,12 +62,18 @@ export function PromptBox({
   onAddFilter,
   views,
   onOpenView,
+  viewsMenu,
+  pristine,
 }: {
   onApply: (applied: AppliedPrompt) => void
   onAddFilter: (draft: FilterDraft) => void
   /** Saved views, suggested inline as their names are typed. */
   views: SavedView[]
   onOpenView: (view: SavedView) => void
+  /** The inline views pulldown, shown on the field's bottom line. */
+  viewsMenu: React.ReactNode
+  /** No filters and no selected view: the pulldown follows the filter links instead of leading. */
+  pristine: boolean
 }) {
   const [text, setText] = React.useState("")
   const [isThinking, setIsThinking] = React.useState(false)
@@ -77,17 +83,23 @@ export function PromptBox({
   // it's clear it can't load here, in which case prompts use the basic parser).
   const isModelLoading = status.state === "idle" || status.state === "loading"
   const suggestion = suggestedView(text, views)
-  // The links can wrap on narrow screens; the empty field reserves room for however tall they are.
   const isEmpty = text === ""
-  const linksRef = React.useRef<HTMLParagraphElement>(null)
-  const [linksHeight, setLinksHeight] = React.useState(20)
+  // The field's bottom line (views pulldown, filter links) can wrap on narrow screens; the field's
+  // bottom padding reserves room for however tall it is.
+  const bottomLineRef = React.useRef<HTMLParagraphElement>(null)
+  const [bottomLineHeight, setBottomLineHeight] = React.useState(20)
   React.useLayoutEffect(() => {
-    const el = linksRef.current
+    const el = bottomLineRef.current
     if (!el) return
-    const observer = new ResizeObserver(() => setLinksHeight(el.offsetHeight))
+    const observer = new ResizeObserver(() => setBottomLineHeight(el.offsetHeight))
     observer.observe(el)
     return () => observer.disconnect()
-  }, [isEmpty, isModelLoading])
+  }, [isModelLoading])
+  // Focus the field when it appears (the model finished loading, or was already loaded).
+  const inputRef = React.useRef<HTMLTextAreaElement>(null)
+  React.useEffect(() => {
+    if (!isModelLoading) inputRef.current?.focus()
+  }, [isModelLoading])
 
   const submit = async () => {
     const prompt = text.trim()
@@ -155,11 +167,15 @@ export function PromptBox({
     </HeaderFilterPopover>
   )
 
+  const gap = <Box component="span" sx={{ display: "inline-block", width: 12 }} />
+
   if (isModelLoading) {
     return (
       <Stack direction="row" alignItems="center" sx={{ minHeight: FILTER_HEIGHT }}>
         <Text variant="body2" color={colors.content.dark} component="span" sx={{ fontSize: FONT_SIZE, lineHeight: LINE_HEIGHT }}>
           {filterLinks("Filter by")}
+          {gap}
+          {viewsMenu}
         </Text>
         {linkFilterPopover}
       </Stack>
@@ -171,7 +187,8 @@ export function PromptBox({
       <Box sx={{ position: "relative" }}>
         <TextField
           multiline
-          minRows={text ? 2 : 1}
+          minRows={1}
+          inputRef={inputRef}
           maxRows={5}
           fullWidth
           value={text}
@@ -203,35 +220,51 @@ export function PromptBox({
                 borderRadius: 2,
                 alignItems: "flex-start",
                 paddingRight: "52px !important",
-                ...(isEmpty && { paddingBottom: `calc(${PADDING_Y} + ${linksHeight}px) !important` }),
+                paddingBottom: `calc(${PADDING_Y} + ${bottomLineHeight}px) !important`,
                 "& textarea": { resize: "none", lineHeight: LINE_HEIGHT },
               },
             },
           }}
         />
         {/*
-          The filter links, drawn in the empty field under the placeholder, in space its bottom
-          padding reserves. Only the links take clicks; a click anywhere else lands in the field.
+          The field's bottom line, in space its bottom padding reserves. Empty with no filters or
+          view: "or filter by …" then the views pulldown. Otherwise the pulldown leads, at the left
+          edge, followed by the filter links while the field is empty. Only the links and the
+          pulldown take clicks; a click anywhere else lands in the field.
         */}
-        {!text && (
-          <Text
-            ref={linksRef}
-            variant="body2"
-            color={colors.content.dark}
-            component="span"
-            sx={{
-              position: "absolute",
-              left: TEXT_LEFT,
-              right: "56px",
-              top: `calc(${PADDING_Y} + ${LINE_HEIGHT})`,
-              fontSize: FONT_SIZE,
-              lineHeight: LINE_HEIGHT,
-              pointerEvents: "none",
-            }}
-          >
-            {filterLinks("or filter by")}
-          </Text>
-        )}
+        <Text
+          ref={bottomLineRef}
+          variant="body2"
+          color={colors.content.dark}
+          component="span"
+          sx={{
+            position: "absolute",
+            left: TEXT_LEFT,
+            right: "56px",
+            bottom: PADDING_Y,
+            fontSize: FONT_SIZE,
+            lineHeight: LINE_HEIGHT,
+            pointerEvents: "none",
+          }}
+        >
+          {pristine && isEmpty ? (
+            <>
+              {filterLinks("or filter by")}
+              {gap}
+              {viewsMenu}
+            </>
+          ) : (
+            <>
+              {viewsMenu}
+              {isEmpty && (
+                <>
+                  {gap}
+                  {filterLinks("or filter by")}
+                </>
+              )}
+            </>
+          )}
+        </Text>
         {/*
           A matching saved view: the rest of its name in grey after what's typed (the typed part
           is drawn invisibly so the grey text lines up with the cursor), and what Enter will do.
