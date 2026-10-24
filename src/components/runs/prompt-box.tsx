@@ -1,8 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { Box, CircularProgress, IconButton, InputAdornment, Link, Stack, TextField, Tooltip } from "@mui/material"
-import { ArrowUpIcon, SparkleIcon } from "@phosphor-icons/react"
+import { Box, CircularProgress, IconButton, Link, Stack, TextField, Tooltip } from "@mui/material"
+import { ArrowUpIcon } from "@phosphor-icons/react"
 
 import { Text, colors } from "common"
 import { FILTER_HEIGHT } from "@/vivaa/staff/components/FiltersV2/constants"
@@ -29,8 +29,8 @@ const FONT_SIZE = "0.8125rem"
 const LINE_HEIGHT = "20px"
 /** Vertical padding of a multiline field (the theme sets it, with !important). */
 const PADDING_Y = "8.5px"
-/** Where the typed text starts: the outlined input's 14px padding + 16px icon + 8px adornment gap. */
-const TEXT_LEFT = "38px"
+/** Where the typed text starts: the outlined input's 14px padding. */
+const TEXT_LEFT = "14px"
 /** A saved view is suggested once the typed text is longer than this and starts its name. */
 const VIEW_SUGGEST_MIN_CHARS = 10
 
@@ -209,11 +209,6 @@ export function PromptBox({
           }}
           slotProps={{
             input: {
-              startAdornment: (
-                <InputAdornment position="start" sx={{ alignSelf: "flex-start", marginTop: 0 }}>
-                  <SparkleIcon size={16} color={colors.extended.gray["45"]} />
-                </InputAdornment>
-              ),
               sx: {
                 fontSize: FONT_SIZE,
                 lineHeight: LINE_HEIGHT,

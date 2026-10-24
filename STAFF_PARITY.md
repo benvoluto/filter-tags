@@ -84,7 +84,8 @@ placeholder, and open the same filter editor as the quick filters; they disappea
 - **Views:** the views pulldown is inline text inside the field (stack icon, name, ▾; no border,
   the links' 13px). With no filters, no selected view and nothing typed it follows the filter
   links; otherwise it leads the field's bottom line, at the left edge, and stays there while the
-  user types. Save view sits to the right of the field once results are filtered. The model names
+  user types. Once results are filtered, the filters line ends with Clear filters and Save view
+  (no Match all switch in this variant: its filters always all apply). The model names
   each saved view in 2–4 words (a rule-made name if it isn't available). Typing more than 10
   characters of a saved view's name shows the rest in grey; Tab completes it, Enter opens the view.
   Selecting a view applies its filters; the filters line includes Add filter. Clearing every filter

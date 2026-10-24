@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Box, Button, CircularProgress, FormControlLabel, IconButton, Link, Stack, Switch, Tooltip } from "@mui/material"
+import { Button, CircularProgress, FormControlLabel, IconButton, Link, Stack, Switch, Tooltip } from "@mui/material"
 import { type GridColDef, type GridSortModel } from "@mui/x-data-grid"
 import { BookmarkSimpleIcon, FunnelSimpleXIcon } from "@phosphor-icons/react"
 
@@ -251,9 +251,23 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     </>
   )
 
+  /** Save view: on the search line beside the views menu, or (prompt variant) ending the filters line. */
+  const saveViewButton = canSaveView ? (
+    <Button
+      variant="contained"
+      startIcon={isNamingView ? <CircularProgress size={14} color="inherit" /> : <BookmarkSimpleIcon size={16} />}
+      disabled={isNamingView}
+      onClick={() => void saveView()}
+      sx={{ whiteSpace: "nowrap" }}
+      title={selectedView ? `Save as a new view (${selectedView.name} has been edited)` : undefined}
+    >
+      Save view
+    </Button>
+  ) : null
+
   /**
-   * Clear filters and Match all: they act on the filters, so they end the filters line — which only
-   * exists once a filter is applied. With no filters there is nothing to clear or match.
+   * Clear filters and Match all (prompt variant: Clear filters and Save view): they act on the
+   * filters, so they end the filters line — which only exists once a filter is applied.
    */
   const filterActions = (
     <Stack direction="row" alignItems="center" gap={1} sx={{ minHeight: FILTER_HEIGHT }}>
@@ -268,38 +282,29 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
           Clear filters
         </Button>
       )}
-      <Tooltip title={matchMode === "all" ? "Rows must match every filter" : "Rows may match any filter"}>
-        <FormControlLabel
-          sx={{ marginLeft: 0, marginRight: 0, gap: 0.5, whiteSpace: "nowrap" }}
-          label={<Text variant="body2">{showViews ? "Match all" : "Match all filters"}</Text>}
-          control={
-            <Switch
-              size="small"
-              checked={matchMode === "all"}
-              onChange={(_, all) => {
-                setMatchMode(all ? "all" : "any")
-                goToFirstPage()
-              }}
-            />
-          }
-        />
-      </Tooltip>
+      {/* The prompt variant has no Match all switch; its filters always all apply. */}
+      {variant !== "prompt" && (
+        <Tooltip title={matchMode === "all" ? "Rows must match every filter" : "Rows may match any filter"}>
+          <FormControlLabel
+            sx={{ marginLeft: 0, marginRight: 0, gap: 0.5, whiteSpace: "nowrap" }}
+            label={<Text variant="body2">{showViews ? "Match all" : "Match all filters"}</Text>}
+            control={
+              <Switch
+                size="small"
+                checked={matchMode === "all"}
+                onChange={(_, all) => {
+                  setMatchMode(all ? "all" : "any")
+                  goToFirstPage()
+                }}
+              />
+            }
+          />
+        </Tooltip>
+      )}
+      {variant === "prompt" && saveViewButton}
     </Stack>
   )
 
-  /** Save view belongs with the views menu, on the search line. */
-  const saveViewButton = canSaveView ? (
-    <Button
-      variant="contained"
-      startIcon={isNamingView ? <CircularProgress size={14} color="inherit" /> : <BookmarkSimpleIcon size={16} />}
-      disabled={isNamingView}
-      onClick={() => void saveView()}
-      sx={{ whiteSpace: "nowrap" }}
-      title={selectedView ? `Save as a new view (${selectedView.name} has been edited)` : undefined}
-    >
-      Save view
-    </Button>
-  ) : null
 
   const onRenameView = (id: string, name: string) => setViews((vs) => vs.map((v) => (v.id === id ? { ...v, name } : v)))
   const viewsMenu = (
@@ -341,28 +346,22 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
           */}
           {variant === "prompt" ? (
             <Stack gap={1}>
-              {/* The prompt (views pulldown inside it), with Save view to its right. */}
-              <Stack direction="row" alignItems="flex-start" flexWrap="wrap" gap={1}>
-                <Box sx={{ flex: "1 1 420px", minWidth: 0 }}>
-                  <PromptBox
-                    onApply={applyPrompt}
-                    onAddFilter={addFilter}
+              <PromptBox
+                onApply={applyPrompt}
+                onAddFilter={addFilter}
+                views={views}
+                onOpenView={applyView}
+                pristine={!hasFilters && !selectedViewId}
+                viewsMenu={
+                  <InlineViewsMenu
                     views={views}
-                    onOpenView={applyView}
-                    pristine={!hasFilters && !selectedViewId}
-                    viewsMenu={
-                      <InlineViewsMenu
-                        views={views}
-                        selectedId={selectedViewId}
-                        edited={viewEdited}
-                        onSelect={applyView}
-                        onRename={onRenameView}
-                      />
-                    }
+                    selectedId={selectedViewId}
+                    edited={viewEdited}
+                    onSelect={applyView}
+                    onRename={onRenameView}
                   />
-                </Box>
-                {saveViewButton}
-              </Stack>
+                }
+              />
               {hasFilters && (
                 <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
                   <FilterBar>{filterControls}</FilterBar>
