@@ -12,6 +12,7 @@ import type { SearchBoxHandle } from "./search-box"
 import { COLUMNS, COLUMN_MAP, ROWS, formatCell, isEmptyValue, type ColumnKey, type RunRow } from "@/lib/data"
 import { filterColumns, matchFilters, matchSearch, newFilterId, type Filter, type MatchMode } from "@/lib/filters"
 import type { SortRule } from "@/lib/sort"
+import type { PrototypeVariant } from "@/lib/variants"
 import { suggestViewName } from "@/lib/filter-model"
 import {
   fallbackViewName,
@@ -73,11 +74,7 @@ function compareRows(a: RunRow, b: RunRow, sort: SortRule | null) {
   return sort.dir === "asc" ? cmp : -cmp
 }
 
-/**
- * "filters": filters only · "quick": + partial (quick) filters · "views": + quick filters and saved
- * views · "prompt": one natural-language field (on-device model) in place of search and Add filter
- */
-export type PrototypeVariant = "filters" | "quick" | "views" | "prompt"
+export type { PrototypeVariant } from "@/lib/variants"
 
 /** Lets the grid's empty overlay (a slot component) reach the page's reset. */
 const ResetContext = React.createContext<(() => void) | null>(null)

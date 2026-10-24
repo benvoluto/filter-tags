@@ -4,7 +4,8 @@ import * as React from "react"
 import { Box, Stack, ToggleButton, ToggleButtonGroup } from "@mui/material"
 
 import { Text, colors } from "common"
-import { RunsTable, type PrototypeVariant } from "@/components/runs/runs-table"
+import { RunsTable } from "@/components/runs/runs-table"
+import { variantFromPath, type PrototypeVariant } from "@/lib/variants"
 import { loadModel } from "@/lib/filter-model"
 
 const VARIANTS: { value: PrototypeVariant; label: string }[] = [
@@ -20,7 +21,19 @@ const VARIANTS: { value: PrototypeVariant; label: string }[] = [
  * The variant switch is prototype scaffolding, drawn with staff's themed ToggleButtonGroup.
  */
 export function PrototypeShell() {
-  const [variant, setVariant] = React.useState<PrototypeVariant>("filters")
+  // The variant is in the URL (/prompt, /views…), so a link opens straight to it. Switching uses
+  // pushState rather than a navigation, so the table keeps its state across variants as before;
+  // Back/Forward switch between them.
+  const [variant, setVariantState] = React.useState<PrototypeVariant>(() => variantFromPath(window.location.pathname))
+  const setVariant = (next: PrototypeVariant) => {
+    setVariantState(next)
+    if (window.location.pathname !== `/${next}`) window.history.pushState(null, "", `/${next}${window.location.search}`)
+  }
+  React.useEffect(() => {
+    const onPopState = () => setVariantState(variantFromPath(window.location.pathname))
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
+  }, [])
   // The Prompt variant's on-device model starts loading with the page, whichever variant is shown,
   // so it's usually ready by the time someone switches to it.
   React.useEffect(() => {

@@ -93,6 +93,13 @@ placeholder, and open the same filter editor as the quick filters; they disappea
 - **Focus:** the field takes focus when it appears, so the F / S / C shortcuts (which only work
   when nothing is focused) need a click outside it first.
 
+## Variant URLs
+
+Each prototype variant has its own URL: `/filters`, `/quick`, `/views`, `/prompt` (`/` opens the
+default, Filters only). The switcher updates the URL with `history.pushState`, so the table keeps
+its state when switching and Back / Forward move between variants. `app/[variant]/page.tsx`
+prerenders the four paths; any other path shows the not-found page.
+
 ## Runtime differences from the staff app (environment, not design)
 
 - **Next.js, not Vite.** The prototype stays on Next for Vercel. Synced files import siblings as `./x.js`;
