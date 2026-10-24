@@ -3,9 +3,10 @@ import type { WebWorkerMLCEngine } from "@mlc-ai/web-llm"
 import { FEW_SHOT, MODEL_SCHEMA, buildSystemPrompt, type ModelOutput } from "./prompt-filters"
 
 /*
- * The on-device model: Qwen2.5 1.5B Instruct through WebLLM (WebGPU), in a web worker. About 1 GB
- * on first load, then cached by the browser. One engine per page, shared by every component, so
- * switching prototype variants doesn't reload it.
+ * The on-device model: Qwen2.5 1.5B Instruct through WebLLM (WebGPU), in a web worker. It starts
+ * loading with the page. About 1 GB is downloaded on the first visit and kept in the browser's
+ * Cache Storage (WebLLM's default), so later visits load from disk. One engine per page, shared by
+ * every component, so switching prototype variants doesn't reload it.
  */
 
 const MODEL_F16 = "Qwen2.5-1.5B-Instruct-q4f16_1-MLC"
@@ -15,7 +16,8 @@ const MODEL_F32 = "Qwen2.5-1.5B-Instruct-q4f32_1-MLC"
 export type ModelStatus =
   | { state: "idle" }
   | { state: "unsupported"; reason: string }
-  | { state: "loading"; progress: number; text: string }
+  /** `cached`: the weights are already on this device, so this is a load from disk, not a download. */
+  | { state: "loading"; progress: number; text: string; cached: boolean }
   | { state: "ready"; modelId: string }
   | { state: "error"; message: string }
 
@@ -53,11 +55,14 @@ export function loadModel(): Promise<WebWorkerMLCEngine | null> {
     const adapter = await gpu.requestAdapter()
     if (!adapter) throw new UnsupportedError("No WebGPU adapter (GPU blocked or unavailable)")
     const modelId = adapter.features.has("shader-f16") ? MODEL_F16 : MODEL_F32
-    setStatus({ state: "loading", progress: 0, text: "Starting…" })
-    const { CreateWebWorkerMLCEngine } = await import("@mlc-ai/web-llm")
+    const { CreateWebWorkerMLCEngine, hasModelInCache } = await import("@mlc-ai/web-llm")
+    const cached = await hasModelInCache(modelId).catch(() => false)
+    setStatus({ state: "loading", progress: 0, text: "Starting…", cached })
+    // Ask the browser not to evict a 1 GB cache under storage pressure (it may say no).
+    if (!cached) void navigator.storage?.persist?.().catch(() => false)
     const worker = new Worker(new URL("./llm.worker.ts", import.meta.url), { type: "module" })
     const created = await CreateWebWorkerMLCEngine(worker, modelId, {
-      initProgressCallback: (r) => setStatus({ state: "loading", progress: r.progress, text: r.text }),
+      initProgressCallback: (r) => setStatus({ state: "loading", progress: r.progress, text: r.text, cached }),
     })
     setStatus({ state: "ready", modelId })
     return created

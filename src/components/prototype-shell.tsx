@@ -5,6 +5,7 @@ import { Box, Stack, ToggleButton, ToggleButtonGroup } from "@mui/material"
 
 import { Text, colors } from "common"
 import { RunsTable, type PrototypeVariant } from "@/components/runs/runs-table"
+import { loadModel } from "@/lib/filter-model"
 
 const VARIANTS: { value: PrototypeVariant; label: string }[] = [
   { value: "filters", label: "Filters only" },
@@ -20,6 +21,11 @@ const VARIANTS: { value: PrototypeVariant; label: string }[] = [
  */
 export function PrototypeShell() {
   const [variant, setVariant] = React.useState<PrototypeVariant>("filters")
+  // The Prompt variant's on-device model starts loading with the page, whichever variant is shown,
+  // so it's usually ready by the time someone switches to it.
+  React.useEffect(() => {
+    void loadModel()
+  }, [])
   return (
     <Box component="main">
       <Stack

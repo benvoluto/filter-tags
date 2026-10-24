@@ -98,9 +98,6 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
   const [views, setViews] = React.useState<SavedView[]>([])
   const [selectedViewId, setSelectedViewId] = React.useState<string | null>(null)
   const searchRef = React.useRef<SearchBoxHandle>(null)
-  // Prompt variant: the last prompt applied, and the state before it (for Undo).
-  const [lastPrompt, setLastPrompt] = React.useState<AppliedPrompt | null>(null)
-  const [beforePrompt, setBeforePrompt] = React.useState<{ filters: Filter[]; sortModel: GridSortModel } | null>(null)
 
   // Staff's table state hook: page + page size + sort model, in the grid's own shapes.
   const { pagination, sort: sortState, paginationModel, goToFirstPage } = useTableState({
@@ -173,8 +170,6 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
    */
   const applyPrompt = (applied: AppliedPrompt) => {
     const { result } = applied
-    setBeforePrompt({ filters, sortModel: sortState.sortModel })
-    setLastPrompt(applied)
     if (!result.filters.length && !result.sort) return
     const replaced = new Set(result.filters.filter((f) => f.kind === "column").map((f) => f.column))
     setFilters((fs) => [
@@ -184,15 +179,6 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     if (result.sort) setSort(result.sort)
     goToFirstPage()
   }
-  const undoPrompt = () => {
-    if (!beforePrompt) return
-    setFilters(beforePrompt.filters)
-    sortState.setSortModel(beforePrompt.sortModel)
-    setBeforePrompt(null)
-    setLastPrompt(null)
-    goToFirstPage()
-  }
-
   const resetAll = () => {
     clearFilters()
     searchRef.current?.clear()
@@ -313,7 +299,7 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
           */}
           {variant === "prompt" ? (
             <Stack gap={1}>
-              <PromptBox onApply={applyPrompt} onAddFilter={addFilter} lastApplied={lastPrompt} onUndo={beforePrompt ? undoPrompt : null} />
+              <PromptBox onApply={applyPrompt} onAddFilter={addFilter} />
               {hasFilters && (
                 <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
                   <FilterBar>{filterControls}</FilterBar>

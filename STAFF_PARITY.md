@@ -64,19 +64,19 @@ exists:
 
 The fourth variant swaps search and Add filter for one large field (`prompt-box.tsx`). A sentence
 becomes ordinary filter chips and, if it names one, a sort. Underneath, underlined links (status,
-customer, created by → Owner, date started) open the same filter editor as the quick filters.
+customer, created by → Owner, date started) sit on the empty field's second line, under the
+placeholder, and open the same filter editor as the quick filters; they disappear once the user types.
 
 - **Model:** Qwen2.5 1.5B Instruct via WebLLM (`@mlc-ai/web-llm`), WebGPU, in a web worker
-  (`lib/llm.worker.ts`, `lib/filter-model.ts`). About 1 GB from Hugging Face on first focus of the
-  field, then cached by the browser. The f32 build is used on GPUs without `shader-f16`.
+  (`lib/llm.worker.ts`, `lib/filter-model.ts`). Loading starts with the page, in every variant:
+  about 1 GB from Hugging Face on the first visit, then loaded from the browser's Cache Storage. The f32 build is used on GPUs without `shader-f16`.
 - **The model never sees rows.** Its output is constrained to a JSON schema (column, operator,
   values; sort; leftover search text). `lib/prompt-filters.ts` then grounds it in code: values are
   matched to the column's real values ("riverbend" → Riverbend Health, "failing" → Failed), date
   tokens (`days_ago:3`, "yesterday") and duration units are resolved, operators a column can't use
-  are dropped, and split filters on one column are merged. Anything changed or dropped is listed.
+  are dropped, and split filters on one column are merged.
 - **"Today"** for relative dates is the newest run in the sample data (Oct 14, 2026), not the clock.
 - **Applying:** a prompt's filters replace existing filters on the same columns and keep the rest.
-  A line under the field shows how the last prompt was read, with Undo.
 - **Fallback:** until the model is ready, or where WebGPU is missing or blocked, prompts go through
   a small rule-based parser (`parseWithRules`), labelled "basic parser".
 

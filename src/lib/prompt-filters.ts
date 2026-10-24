@@ -1,4 +1,4 @@
-import { COLUMNS, COLUMN_MAP, ROWS, distinctValues, formatCriterion, type ColumnDef, type ColumnKey } from "./data"
+import { COLUMNS, COLUMN_MAP, ROWS, distinctValues, type ColumnDef, type ColumnKey } from "./data"
 import { COMPARATOR_MAP, comparatorsFor, type Comparator, type Filter } from "./filters"
 import type { SortRule } from "./sort"
 
@@ -136,7 +136,7 @@ export const FEW_SHOT: { user: string; output: ModelOutput }[] = [
 export type PromptResult = {
   filters: FilterDraft[]
   sort: SortRule | null
-  /** Things the parser changed or dropped, shown to the user so a wrong reading is visible. */
+  /** Things the parser changed or dropped (not shown in the UI at the moment). */
   notes: string[]
 }
 
@@ -409,19 +409,4 @@ export function parseWithRules(text: string): PromptResult {
 
   const notes = filters.length || sort ? [] : ["Nothing recognisable as a filter"]
   return { filters: mergeFilters(filters), sort, notes }
-}
-
-/** A one-line reading of what was applied, e.g. "Status is Failed · Errors > 3 · sorted by Errors ↓". */
-export function describeResult(result: PromptResult): string {
-  const parts = result.filters.map((f) => {
-    if (f.kind === "search") return `contains “${f.values[0]}”`
-    const col = COLUMN_MAP[f.column]
-    const cmp = COMPARATOR_MAP[f.comparator]
-    const vals = f.values.map((v) => formatCriterion(col, v))
-    if (cmp.arity === "none") return `${col.label} ${cmp.label}`
-    if (cmp.arity === "two") return `${col.label} between ${vals[0]} and ${vals[1] ?? "…"}`
-    return `${col.label} ${cmp.short} ${vals.join(", ")}`
-  })
-  if (result.sort) parts.push(`sorted by ${COLUMN_MAP[result.sort.key].label} ${result.sort.dir === "asc" ? "↑" : "↓"}`)
-  return parts.join(" · ")
 }
