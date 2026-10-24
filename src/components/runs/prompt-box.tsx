@@ -1,17 +1,19 @@
 "use client"
 
 import * as React from "react"
-import { Box, CircularProgress, IconButton, InputAdornment, LinearProgress, Link, Stack, TextField, Tooltip } from "@mui/material"
+import { Box, CircularProgress, IconButton, InputAdornment, Link, Stack, TextField, Tooltip } from "@mui/material"
 import { ArrowUpIcon, SparkleIcon } from "@phosphor-icons/react"
 
 import { Text, colors } from "common"
+import { FILTER_HEIGHT } from "@/vivaa/staff/components/FiltersV2/constants"
 import { type ColumnKey } from "@/lib/data"
-import { getModelStatus, loadModel, promptModel, subscribeModelStatus, type ModelStatus } from "@/lib/filter-model"
+import { getModelStatus, promptModel, subscribeModelStatus } from "@/lib/filter-model"
 import { groundModelOutput, parseWithRules, type PromptResult } from "@/lib/prompt-filters"
 import { FilterEditor, type FilterDraft } from "./filter-editor"
 import { HeaderFilterPopover } from "./filter-popover"
+import type { SavedView } from "@/lib/views"
 
-export const PROMPT_PLACEHOLDER = "Describe the runs you want"
+export const PROMPT_PLACEHOLDER = "Describe the search, filter, and sort you want"
 
 /** The underlined filter links under the prompt: label as read in the sentence → column. */
 const LINK_FILTERS: { label: string; column: ColumnKey }[] = [
@@ -29,6 +31,15 @@ const LINE_HEIGHT = "20px"
 const PADDING_Y = "8.5px"
 /** Where the typed text starts: the outlined input's 14px padding + 16px icon + 8px adornment gap. */
 const TEXT_LEFT = "38px"
+/** A saved view is suggested once the typed text is longer than this and starts its name. */
+const VIEW_SUGGEST_MIN_CHARS = 10
+
+/** The saved view whose name the text is the start of (case-insensitive), once it's long enough. */
+function suggestedView(text: string, views: SavedView[]): SavedView | null {
+  const typed = text.trimStart().toLowerCase()
+  if (typed.length <= VIEW_SUGGEST_MIN_CHARS) return null
+  return views.find((v) => v.name.toLowerCase().startsWith(typed) && v.name.length >= typed.length) ?? null
+}
 
 function useModelStatus() {
   return React.useSyncExternalStore(subscribeModelStatus, getModelStatus, getModelStatus)
@@ -38,24 +49,34 @@ export type AppliedPrompt = { text: string; result: PromptResult; source: "model
 
 /**
  * The "prompt" variant's entry point, standing in for the search box and Add filter: one large
- * field that turns a sentence into filter chips. While it's empty, its second line holds
+ * field that turns a sentence into filter chips and a sort. While it's empty, its second line holds
  * underlined links that open the ordinary filter editor for the most-used columns; they go away
- * as soon as the user types.
+ * as soon as the user types. Typing the start of a saved view's name suggests it; Enter opens it.
  *
- * The model starts loading with the page (PrototypeShell). Until it's ready (or if the browser
- * can't run it) prompts go through the rule-based parser, so the box always does something.
+ * The model starts loading with the page (PrototypeShell). Until it's ready only the filter links
+ * show. If it can't load here (no WebGPU, download failed), the field appears anyway and prompts
+ * go through the rule-based parser.
  */
 export function PromptBox({
   onApply,
   onAddFilter,
+  views,
+  onOpenView,
 }: {
   onApply: (applied: AppliedPrompt) => void
   onAddFilter: (draft: FilterDraft) => void
+  /** Saved views, suggested inline as their names are typed. */
+  views: SavedView[]
+  onOpenView: (view: SavedView) => void
 }) {
   const [text, setText] = React.useState("")
   const [isThinking, setIsThinking] = React.useState(false)
   const [linkFilter, setLinkFilter] = React.useState<{ column: ColumnKey; anchor: Element } | null>(null)
   const status = useModelStatus()
+  // While the model loads, only the filter links show; the field appears once it's ready (or once
+  // it's clear it can't load here, in which case prompts use the basic parser).
+  const isModelLoading = status.state === "idle" || status.state === "loading"
+  const suggestion = suggestedView(text, views)
   // The links can wrap on narrow screens; the empty field reserves room for however tall they are.
   const isEmpty = text === ""
   const linksRef = React.useRef<HTMLParagraphElement>(null)
@@ -66,11 +87,17 @@ export function PromptBox({
     const observer = new ResizeObserver(() => setLinksHeight(el.offsetHeight))
     observer.observe(el)
     return () => observer.disconnect()
-  }, [isEmpty])
+  }, [isEmpty, isModelLoading])
 
   const submit = async () => {
     const prompt = text.trim()
     if (!prompt || isThinking) return
+    if (suggestion) {
+      // A saved view's name: open the view instead of reading the text as a prompt.
+      onOpenView(suggestion)
+      setText("")
+      return
+    }
     setIsThinking(true)
     try {
       let applied: AppliedPrompt
@@ -91,6 +118,54 @@ export function PromptBox({
     }
   }
 
+  /** "<lead> status, customer, created by, or date started", each an underlined link. */
+  const filterLinks = (lead: string) => (
+    <>
+      {lead}{" "}
+      {LINK_FILTERS.map((f, i) => (
+        <React.Fragment key={f.column}>
+          <Link
+            component="button"
+            type="button"
+            underline="always"
+            onClick={(e) => setLinkFilter({ column: f.column, anchor: e.currentTarget })}
+            sx={{ fontSize: "inherit", lineHeight: "inherit", verticalAlign: "baseline", pointerEvents: "auto" }}
+          >
+            {f.label}
+          </Link>
+          {i < LINK_FILTERS.length - 2 ? ", " : i === LINK_FILTERS.length - 2 ? ", or " : ""}
+        </React.Fragment>
+      ))}
+    </>
+  )
+
+  const linkFilterPopover = (
+    <HeaderFilterPopover anchorElement={linkFilter?.anchor ?? null} onClose={() => setLinkFilter(null)}>
+      {linkFilter && (
+        <FilterEditor
+          key={linkFilter.column}
+          column={linkFilter.column}
+          onCancel={() => setLinkFilter(null)}
+          onSubmit={(draft) => {
+            onAddFilter(draft)
+            setLinkFilter(null)
+          }}
+        />
+      )}
+    </HeaderFilterPopover>
+  )
+
+  if (isModelLoading) {
+    return (
+      <Stack direction="row" alignItems="center" sx={{ minHeight: FILTER_HEIGHT }}>
+        <Text variant="body2" color={colors.content.dark} component="span" sx={{ fontSize: FONT_SIZE, lineHeight: LINE_HEIGHT }}>
+          {filterLinks("Filter by")}
+        </Text>
+        {linkFilterPopover}
+      </Stack>
+    )
+  }
+
   return (
     <Stack gap={1} sx={{ width: "100%" }}>
       <Box sx={{ position: "relative" }}>
@@ -101,12 +176,17 @@ export function PromptBox({
           fullWidth
           value={text}
           placeholder={PROMPT_PLACEHOLDER}
-          aria-label="Describe the runs you want"
+          aria-label={PROMPT_PLACEHOLDER}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               void submit()
+            }
+            // Tab completes the suggested name in the field (Enter then opens it).
+            if (e.key === "Tab" && !e.shiftKey && suggestion && text.trimStart().length < suggestion.name.length) {
+              e.preventDefault()
+              setText(suggestion.name)
             }
             if (e.key === "Escape" && text) setText("")
           }}
@@ -149,21 +229,49 @@ export function PromptBox({
               pointerEvents: "none",
             }}
           >
-            or filter by{" "}
-            {LINK_FILTERS.map((f, i) => (
-              <React.Fragment key={f.column}>
-                <Link
-                  component="button"
-                  type="button"
-                  underline="always"
-                  onClick={(e) => setLinkFilter({ column: f.column, anchor: e.currentTarget })}
-                  sx={{ fontSize: "inherit", lineHeight: "inherit", verticalAlign: "baseline", pointerEvents: "auto" }}
-                >
-                  {f.label}
-                </Link>
-                {i < LINK_FILTERS.length - 2 ? ", " : i === LINK_FILTERS.length - 2 ? " or " : ""}
-              </React.Fragment>
-            ))}
+            {filterLinks("or filter by")}
+          </Text>
+        )}
+        {/*
+          A matching saved view: the rest of its name in grey after what's typed (the typed part
+          is drawn invisibly so the grey text lines up with the cursor), and what Enter will do.
+        */}
+        {suggestion && (
+          <Text
+            variant="body2"
+            component="span"
+            aria-live="polite"
+            sx={{
+              position: "absolute",
+              left: TEXT_LEFT,
+              right: "56px",
+              top: PADDING_Y,
+              fontSize: FONT_SIZE,
+              lineHeight: LINE_HEIGHT,
+              whiteSpace: "pre-wrap",
+              pointerEvents: "none",
+            }}
+          >
+            <Box component="span" sx={{ visibility: "hidden" }}>
+              {text}
+            </Box>
+            <Box component="span" sx={{ color: colors.content.disabled }}>
+              {suggestion.name.slice(text.trimStart().length)}
+            </Box>
+            <Box
+              component="span"
+              sx={{
+                marginLeft: 1,
+                paddingX: 0.75,
+                borderRadius: 0.5,
+                fontSize: "0.75rem",
+                color: colors.content.dark,
+                backgroundColor: colors.background.default,
+                border: `1px solid ${colors.border.light}`,
+              }}
+            >
+              ↵ open saved view
+            </Box>
           </Text>
         )}
         {/* Apply, pinned to the bottom-right corner of the field. */}
@@ -188,61 +296,7 @@ export function PromptBox({
           )}
         </Box>
       </Box>
-
-      <Stack direction="row" justifyContent="flex-end">
-        <ModelStatusLine status={status} />
-      </Stack>
-
-      <HeaderFilterPopover anchorElement={linkFilter?.anchor ?? null} onClose={() => setLinkFilter(null)}>
-        {linkFilter && (
-          <FilterEditor
-            key={linkFilter.column}
-            column={linkFilter.column}
-            onCancel={() => setLinkFilter(null)}
-            onSubmit={(draft) => {
-              onAddFilter(draft)
-              setLinkFilter(null)
-            }}
-          />
-        )}
-      </HeaderFilterPopover>
+      {linkFilterPopover}
     </Stack>
   )
-}
-
-function ModelStatusLine({ status }: { status: ModelStatus }) {
-  const caption = (children: React.ReactNode, color: string = colors.content.dark) => (
-    <Text variant="caption" color={color} component="span">
-      {children}
-    </Text>
-  )
-  switch (status.state) {
-    case "idle":
-      return caption("Starting on-device model…")
-    case "loading": {
-      const pct = Math.round(status.progress * 100)
-      const what = status.cached
-        ? `Loading on-device model from this browser’s cache… ${pct}%`
-        : `Downloading on-device model (about 1 GB, first visit only)… ${pct}%`
-      return (
-        <Stack gap={0.5} sx={{ minWidth: 220 }}>
-          {caption(`${what} · basic parser until then`)}
-          <LinearProgress variant="determinate" value={status.progress * 100} sx={{ height: 2 }} />
-        </Stack>
-      )
-    }
-    case "ready":
-      return caption("On-device model ready · your prompt stays in this browser")
-    case "unsupported":
-      return caption(`${status.reason} · using the basic parser`)
-    case "error":
-      return (
-        <Stack direction="row" gap={1} alignItems="baseline">
-          {caption("Model didn't load · using the basic parser", colors.content.dark)}
-          <Link component="button" type="button" variant="caption" onClick={() => void loadModel()}>
-            Retry
-          </Link>
-        </Stack>
-      )
-  }
 }

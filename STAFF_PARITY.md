@@ -77,8 +77,14 @@ placeholder, and open the same filter editor as the quick filters; they disappea
   are dropped, and split filters on one column are merged.
 - **"Today"** for relative dates is the newest run in the sample data (Oct 14, 2026), not the clock.
 - **Applying:** a prompt's filters replace existing filters on the same columns and keep the rest.
-- **Fallback:** until the model is ready, or where WebGPU is missing or blocked, prompts go through
-  a small rule-based parser (`parseWithRules`), labelled "basic parser".
+- **While the model loads** only "Filter by status, customer, created by, or date started" shows;
+  the field (placeholder "Describe the search, filter, and sort you want") appears once it's ready.
+  Where WebGPU is missing or the download fails, the field appears anyway and prompts go through a
+  small rule-based parser (`parseWithRules`).
+- **Views:** the views menu sits to the right of the field, with Save view once results are
+  filtered. The model names each saved view in 2–4 words (a rule-made name if it isn't available).
+  Typing more than 10 characters of a saved view's name shows the rest in grey; Tab completes it,
+  Enter opens the view.
 
 ## Runtime differences from the staff app (environment, not design)
 

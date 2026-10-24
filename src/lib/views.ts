@@ -46,3 +46,29 @@ export function viewMatchesState(view: SavedView, filters: Filter[], sort: SortR
     JSON.stringify(view.filters) === JSON.stringify(filters.map(stripId))
   )
 }
+
+/**
+ * A short rule-made name, used when the model can't name a view: the first two filters' values
+ * ("Failed · Epic"), or the sort if there are no filters.
+ */
+export function fallbackViewName(filters: ViewFilter[], sort: SortRule | null): string {
+  const parts = filters.slice(0, 2).map((f) => {
+    if (f.kind === "search") return `“${f.values[0] ?? ""}”`
+    const label = COLUMN_MAP[f.column].label
+    if (f.comparator === "is" || f.comparator === "equals") return f.values.length > 2 ? label : f.values.join("/")
+    if (f.comparator === "is_not") return `Not ${f.values.slice(0, 2).join("/")}`
+    return label
+  })
+  if (!parts.length && sort) parts.push(`By ${COLUMN_MAP[sort.key].label}`)
+  const name = parts.join(" · ") || "View"
+  return name.length > 30 ? `${name.slice(0, 29)}…` : name
+}
+
+/** `name`, or `name 2`, `name 3`… if a view already has it. */
+export function uniqueViewName(name: string, views: SavedView[]): string {
+  const taken = new Set(views.map((v) => v.name.toLowerCase()))
+  if (!taken.has(name.toLowerCase())) return name
+  let n = 2
+  while (taken.has(`${name} ${n}`.toLowerCase())) n += 1
+  return `${name} ${n}`
+}

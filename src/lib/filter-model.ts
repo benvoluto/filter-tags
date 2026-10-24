@@ -103,3 +103,44 @@ export async function promptModel(text: string): Promise<ModelOutput> {
   await llm.resetChat()
   return JSON.parse(reply.choices[0]?.message.content ?? "{}") as ModelOutput
 }
+
+/** Naming examples: filter summary → a short title. */
+const NAME_EXAMPLES: [string, string][] = [
+  ["Status is any of Failed, Cancelled · EHR is Epic · sorted by Errors descending", "Failed Epic runs"],
+  ["Owner is Priya Shah · Started on or after Oct 11, 2026", "Priya's recent runs"],
+  ["Duration greater than 10m 00s · Customer is Riverbend Health", "Slow Riverbend runs"],
+]
+
+/**
+ * A very short name (2–4 words) for a saved view, from a summary of its filters and sort. Null
+ * when the model isn't ready or returns nothing usable; callers fall back to a rule-made name.
+ */
+export async function suggestViewName(summary: string): Promise<string | null> {
+  const llm = status.state === "ready" ? await engine : null
+  if (!llm) return null
+  try {
+    const reply = await llm.chat.completions.create({
+      messages: [
+        { role: "system", content: "You name saved views of a table of workflow runs. Reply with only a 2 to 4 word title. No quotes, no punctuation at the end." },
+        ...NAME_EXAMPLES.flatMap(([user, name]) => [
+          { role: "user" as const, content: user },
+          { role: "assistant" as const, content: name },
+        ]),
+        { role: "user", content: summary },
+      ],
+      temperature: 0,
+      max_tokens: 12,
+    })
+    await llm.resetChat()
+    const name = (reply.choices[0]?.message.content ?? "")
+      .split("\n")[0]
+      .replace(/["“”.:]/g, "")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 4)
+      .join(" ")
+    return name.length >= 3 ? name : null
+  } catch {
+    return null
+  }
+}

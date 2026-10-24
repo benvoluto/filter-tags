@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Button, FormControlLabel, IconButton, Link, Stack, Switch, Tooltip } from "@mui/material"
+import { Box, Button, CircularProgress, FormControlLabel, IconButton, Link, Stack, Switch, Tooltip } from "@mui/material"
 import { type GridColDef, type GridSortModel } from "@mui/x-data-grid"
 import { BookmarkSimpleIcon, FunnelSimpleXIcon } from "@phosphor-icons/react"
 
@@ -12,7 +12,16 @@ import type { SearchBoxHandle } from "./search-box"
 import { COLUMNS, COLUMN_MAP, ROWS, formatCell, isEmptyValue, type ColumnKey, type RunRow } from "@/lib/data"
 import { filterColumns, matchFilters, matchSearch, newFilterId, type Filter, type MatchMode } from "@/lib/filters"
 import type { SortRule } from "@/lib/sort"
-import { makeView, viewMatchesState, type SavedView } from "@/lib/views"
+import { suggestViewName } from "@/lib/filter-model"
+import {
+  fallbackViewName,
+  makeView,
+  sortSummary,
+  uniqueViewName,
+  viewFilterSummary,
+  viewMatchesState,
+  type SavedView,
+} from "@/lib/views"
 import { ColumnHeader } from "./column-header"
 import { FilterChip } from "./filter-chip"
 import { FilterEditor, type FilterDraft } from "./filter-editor"
@@ -188,11 +197,13 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
   // Partial filters: hidden in "filters only", once their column is filtered, or past three filters.
   const quickFilters = variant === "filters" || variant === "prompt" || filters.length > 3 ? [] : QUICK_FILTERS.filter((k) => !filteredColumns.has(k))
 
-  // Saved views (views variant only)
+  // Saved views (views and prompt variants)
   const showViews = variant === "views"
+  const hasViews = showViews || variant === "prompt"
   const selectedView = views.find((v) => v.id === selectedViewId) ?? null
   const viewEdited = selectedView ? !viewMatchesState(selectedView, filters, sort, matchMode) : false
-  const canSaveView = showViews && filters.length > 0 && (!selectedView || viewEdited)
+  const canSaveView = hasViews && filters.length > 0 && (!selectedView || viewEdited)
+  const [isNamingView, setIsNamingView] = React.useState(false)
   const applyView = (view: SavedView | null) => {
     setSelectedViewId(view?.id ?? null)
     if (!view) return
@@ -201,8 +212,20 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
     setMatchMode(view.matchMode)
     goToFirstPage()
   }
-  const saveView = () => {
-    const view = makeView(`View ${views.length + 1}`, filters, sort, matchMode)
+  /**
+   * Views variant: "View N". Prompt variant: a very short name from the on-device model (from a
+   * summary of the filters and sort), or a rule-made one if the model isn't available.
+   */
+  const saveView = async () => {
+    let name = `View ${views.length + 1}`
+    if (variant === "prompt") {
+      setIsNamingView(true)
+      const draft = makeView("", filters, sort, matchMode)
+      const summary = [viewFilterSummary(draft), draft.sort ? sortSummary(draft.sort) : ""].filter(Boolean).join(" · ")
+      name = (await suggestViewName(summary)) ?? fallbackViewName(draft.filters, draft.sort)
+      setIsNamingView(false)
+    }
+    const view = makeView(uniqueViewName(name, views), filters, sort, matchMode)
     setViews((vs) => [...vs, view])
     setSelectedViewId(view.id)
   }
@@ -262,13 +285,25 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
   const saveViewButton = canSaveView ? (
     <Button
       variant="contained"
-      startIcon={<BookmarkSimpleIcon size={16} />}
-      onClick={saveView}
+      startIcon={isNamingView ? <CircularProgress size={14} color="inherit" /> : <BookmarkSimpleIcon size={16} />}
+      disabled={isNamingView}
+      onClick={() => void saveView()}
+      sx={{ whiteSpace: "nowrap" }}
       title={selectedView ? `Save as a new view (${selectedView.name} has been edited)` : undefined}
     >
       Save view
     </Button>
   ) : null
+
+  const viewsMenu = (
+    <ViewsMenu
+      views={views}
+      selectedId={selectedViewId}
+      edited={viewEdited}
+      onSelect={applyView}
+      onRename={(id, name) => setViews((vs) => vs.map((v) => (v.id === id ? { ...v, name } : v)))}
+    />
+  )
 
   const columns: GridColDef<RunRow>[] = COLUMNS.map((col) => ({
     field: col.key,
@@ -299,7 +334,21 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
           */}
           {variant === "prompt" ? (
             <Stack gap={1}>
-              <PromptBox onApply={applyPrompt} onAddFilter={addFilter} />
+              {/* The prompt, with the views menu and Save view to its right (below it on narrow screens). */}
+              <Stack direction="row" alignItems="flex-start" flexWrap="wrap" gap={1}>
+                <Box sx={{ flex: "1 1 420px", minWidth: 0 }}>
+                  <PromptBox
+                    onApply={applyPrompt}
+                    onAddFilter={addFilter}
+                    views={views}
+                    onOpenView={applyView}
+                  />
+                </Box>
+                <Stack direction="row" alignItems="center" gap={1}>
+                  {viewsMenu}
+                  {saveViewButton}
+                </Stack>
+              </Stack>
               {hasFilters && (
                 <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
                   <FilterBar>{filterControls}</FilterBar>
@@ -311,15 +360,7 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
             <Stack gap={1}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
                 <FilterBar>
-                  {showViews && (
-                    <ViewsMenu
-                      views={views}
-                      selectedId={selectedViewId}
-                      edited={viewEdited}
-                      onSelect={applyView}
-                      onRename={(id, name) => setViews((vs) => vs.map((v) => (v.id === id ? { ...v, name } : v)))}
-                    />
-                  )}
+                  {showViews && viewsMenu}
                   <SearchBox
                     ref={searchRef}
                     value={query}
