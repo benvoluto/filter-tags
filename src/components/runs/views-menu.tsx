@@ -18,23 +18,35 @@ import { CaretDownIcon, CheckIcon, PencilSimpleIcon, StackIcon } from "@phosphor
 
 import { colors } from "common"
 import { FILTER_HEIGHT } from "@/vivaa/staff/components/FiltersV2/constants"
-import { sortSummary, viewFilterSummary, type SavedView } from "@/lib/views"
+
+/**
+ * The least a view has to be for this menu to list it. Both variants save different things — the
+ * redesign saves filters, sort and match mode; the baseline saves chip values, sort and the search
+ * text — and neither difference is visible here, so the menu takes the rendered `description`
+ * rather than learning two filter models.
+ */
+export type ViewSummary = {
+  id: string
+  name: string
+  /** The menu's second line; newlines are preserved. */
+  description: string
+}
 
 /**
  * Saved-views selector: [views icon · name (edited dot)] [rename] [▾] as one ButtonGroup.
- * Nothing is selected by default; picking a view applies its filters, sort, and match mode.
+ * Nothing is selected by default; picking a view applies whatever that variant saved.
  */
-export function ViewsMenu({
+export function ViewsMenu<V extends ViewSummary>({
   views,
   selectedId,
   edited,
   onSelect,
   onRename,
 }: {
-  views: SavedView[]
+  views: V[]
   selectedId: string | null
   edited: boolean
-  onSelect: (view: SavedView | null) => void
+  onSelect: (view: V | null) => void
   onRename: (id: string, name: string) => void
 }) {
   const selected = views.find((v) => v.id === selectedId) ?? null
@@ -54,7 +66,7 @@ export function ViewsMenu({
     )
   }
 
-  const pick = (view: SavedView | null) => {
+  const pick = (view: V | null) => {
     setOpen(false)
     onSelect(view)
   }
@@ -100,7 +112,7 @@ export function ViewsMenu({
               <ListItemText
                 slotProps={{ secondary: { sx: { whiteSpace: "pre-line" } } }}
                 primary={v.name}
-                secondary={`${viewFilterSummary(v)}\n${sortSummary(v.sort)}${v.matchMode === "any" ? " · match any filter" : ""}`}
+                secondary={v.description}
               />
             </MenuItem>
           ))

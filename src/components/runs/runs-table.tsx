@@ -1,19 +1,29 @@
 "use client"
 
 import * as React from "react"
-import { Button, FormControlLabel, IconButton, Link, Stack, Switch, Tooltip } from "@mui/material"
-import { type GridColDef, type GridSortModel } from "@mui/x-data-grid"
+import { Button, FormControlLabel, IconButton, Stack, Switch, Tooltip } from "@mui/material"
+import { type GridColDef } from "@mui/x-data-grid"
 import { BookmarkSimpleIcon, FunnelSimpleXIcon } from "@phosphor-icons/react"
 
-import { NoRecordsOverlay, NotableDataGrid, Tag, type TagColor, Text, colors, useTableState } from "common"
+import { NotableDataGrid, Text, colors, useTableState } from "common"
 import { FilterBar } from "@/vivaa/staff/components/Layout/FilterBar"
 import { FILTER_HEIGHT } from "@/vivaa/staff/components/FiltersV2/constants"
 import type { SearchBoxHandle } from "./search-box"
-import { COLUMNS, COLUMN_MAP, ROWS, formatCell, isEmptyValue, type ColumnKey, type RunRow } from "@/lib/data"
+import { COLUMNS, ROWS, type ColumnKey, type RunRow } from "@/lib/data"
 import { filterColumns, matchFilters, matchSearch, newFilterId, type Filter, type MatchMode } from "@/lib/filters"
 import type { SortRule } from "@/lib/sort"
-import { makeView, viewMatchesState, type SavedView } from "@/lib/views"
+import { describeView, makeView, viewMatchesState, type SavedView } from "@/lib/views"
 import { ColumnHeader } from "./column-header"
+import {
+  DEFAULT_SORT,
+  PAGE_SIZE_OPTIONS,
+  ResetContext,
+  RunCell,
+  RunsNoRowsOverlay,
+  compareRows,
+  toSortModel,
+  toSortRule,
+} from "./runs-grid"
 import { FilterChip } from "./filter-chip"
 import { FilterEditor, type FilterDraft } from "./filter-editor"
 import { HeaderFilterPopover } from "./filter-popover"
@@ -25,67 +35,14 @@ import { ViewsMenu } from "./views-menu"
 /** Partial filters shown next to the search box: column chosen, criteria pending. */
 const QUICK_FILTERS: ColumnKey[] = ["customer", "trigger", "duration"]
 
-/** Status → staff `Tag` colour, following FLOW_RUN_TAG_PROPS (web/staff/…/Flows/Runs/Run/Status.tsx). */
-const STATUS_TAG_COLOR: Record<string, TagColor> = {
-  Completed: "success",
-  Failed: "error",
-  "Needs Review": "warning",
-  Running: "primary",
-  Cancelled: "error",
-}
+/**
+ * The three redesign variants. "baseline" is today's filter row and lives in its own component
+ * ({@link import("./baseline-runs-table").BaselineRunsTable}), because sharing this one would mean
+ * threading a flag through every control the baseline does not have.
+ */
+export type RedesignVariant = "filters" | "quick" | "views"
 
-/** Columns rendered as entity links (the theme's MuiDataGrid cell link style: ink, blue on hover). */
-const LINK_COLUMNS = new Set<ColumnKey>(["runId", "customer", "owner"])
-
-/** Page sizes the MIT grid allows (staff offers 250 and 500 too; the MIT grid caps pages at 100). */
-const PAGE_SIZE_OPTIONS = [5, 25, 50, 100]
-
-const DEFAULT_SORT: GridSortModel = [{ field: "started", sort: "desc" }]
-
-function toSortRule(sortModel: GridSortModel): SortRule | null {
-  const [first] = sortModel
-  return first?.sort ? { key: first.field as ColumnKey, dir: first.sort } : null
-}
-
-function toSortModel(sort: SortRule | null): GridSortModel {
-  return sort ? [{ field: sort.key, sort: sort.dir }] : []
-}
-
-function compareRows(a: RunRow, b: RunRow, sort: SortRule | null) {
-  if (!sort) return 0
-  const av = a[sort.key]
-  const bv = b[sort.key]
-  // Empty values always sink to the bottom regardless of direction.
-  if (isEmptyValue(av) && isEmptyValue(bv)) return 0
-  if (isEmptyValue(av)) return 1
-  if (isEmptyValue(bv)) return -1
-  const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv))
-  return sort.dir === "asc" ? cmp : -cmp
-}
-
-/** "filters": filters only · "quick": + partial (quick) filters · "views": + quick filters and saved views */
-export type PrototypeVariant = "filters" | "quick" | "views"
-
-/** Lets the grid's empty overlay (a slot component) reach the page's reset. */
-const ResetContext = React.createContext<(() => void) | null>(null)
-
-function RunsNoRowsOverlay() {
-  const reset = React.useContext(ResetContext)
-  return (
-    <NoRecordsOverlay
-      customMessage={{
-        title: "No runs match these filters",
-        action: reset ? (
-          <Button variant="outlined" onClick={reset}>
-            Clear search and filters
-          </Button>
-        ) : undefined,
-      }}
-    />
-  )
-}
-
-export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant }) {
+export function RunsTable({ variant = "filters" }: { variant?: RedesignVariant }) {
   const [query, setQuery] = React.useState("")
   const [filters, setFilters] = React.useState<Filter[]>([])
   const [matchMode, setMatchMode] = React.useState<MatchMode>("all")
@@ -282,7 +239,7 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
               <FilterBar>
                 {showViews && (
                   <ViewsMenu
-                    views={views}
+                    views={views.map((v) => ({ ...v, description: describeView(v) }))}
                     selectedId={selectedViewId}
                     edited={viewEdited}
                     onSelect={applyView}
@@ -353,37 +310,3 @@ export function RunsTable({ variant = "filters" }: { variant?: PrototypeVariant 
   )
 }
 
-/** One cell: staff `Tag` for status, entity links, error counts in the error colour, — for empty. */
-function RunCell({ column, row }: { column: ColumnKey; row: RunRow }) {
-  const col = COLUMN_MAP[column]
-  const value = row[column]
-  if (isEmptyValue(value)) {
-    return (
-      <Text variant="body2" color={colors.content.dark} component="span">
-        —
-      </Text>
-    )
-  }
-  if (column === "status") {
-    return <Tag color={STATUS_TAG_COLOR[value as string] ?? "default"}>{value as string}</Tag>
-  }
-  if (column === "errors" && (value as number) > 0) {
-    return (
-      <Text variant="body2" color="error" bold component="span">
-        {formatCell(col, value)}
-      </Text>
-    )
-  }
-  if (LINK_COLUMNS.has(column)) {
-    return (
-      <Link href="#" underline="hover" onClick={(e) => e.preventDefault()}>
-        {formatCell(col, value)}
-      </Link>
-    )
-  }
-  return (
-    <Text variant="body2" component="span">
-      {formatCell(col, value)}
-    </Text>
-  )
-}

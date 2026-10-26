@@ -33,6 +33,11 @@ export function viewFilterSummary(view: Pick<SavedView, "filters" | "matchMode">
   return parts.join(view.matchMode === "all" ? " · " : " OR ")
 }
 
+/** The views menu's second line: what is filtered, how it is sorted, and the match mode. */
+export function describeView(view: SavedView): string {
+  return `${viewFilterSummary(view)}\n${sortSummary(view.sort)}${view.matchMode === "any" ? " · match any filter" : ""}`
+}
+
 export function sortSummary(sort: SortRule | null): string {
   if (!sort) return "Unsorted"
   return `Sorted by ${COLUMN_MAP[sort.key].label} ${sort.dir === "asc" ? "↑ ascending" : "↓ descending"}`

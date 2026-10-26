@@ -39,7 +39,8 @@ export function SearchBox(props: {
   value: string
   onChange: (value: string) => void
   resultCount: number
-  onSaveAsFilter: () => void
+  /** Omitted where the variant has no filter model to promote a query into. */
+  onSaveAsFilter?: () => void
   width?: number
 }) {
   const { ref, value: initialValue, onChange, resultCount, onSaveAsFilter, width = 220 } = props
@@ -138,7 +139,7 @@ export function SearchBox(props: {
           },
         }}
       />
-      {hasValue && resultCount > 0 && (
+      {hasValue && resultCount > 0 && onSaveAsFilter && (
         <Button
           variant="outlined"
           size="small"
